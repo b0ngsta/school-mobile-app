@@ -77,13 +77,16 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
+    // namespace = package of the Kotlin sources (MainActivity/MainApplication).
     namespace "com.shelfwatchplus"
     defaultConfig {
-        applicationId "com.shelfwatchplus"
+        // Must stay the OLD app's ID so this installs as an update over it.
+        applicationId "com.shelfwatchstudent"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Old app was versionCode 1 — an update must be >= that.
+        versionCode 2
+        versionName "2.0"
     }
     signingConfigs {
         debug {
@@ -98,8 +101,10 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
+            // Same key the old app's releases were signed with (app/debug.keystore —
+            // byte-identical to the old project's), so phones accept this as an update.
+            // For the Play Store, switch to your own upload keystore:
+            // https://reactnative.dev/docs/signed-apk-android
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"

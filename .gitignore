@@ -33,6 +33,9 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+# release signing (npm run keystore) — private, back up instead
+keystore.properties
+*.jks
 .kotlin/
 
 # node.js
@@ -73,3 +76,6 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Gradle wrapper distribution zip (131 MB, exceeds GitHub 100 MB limit)
+/gradle-9.4.1-bin.zip
