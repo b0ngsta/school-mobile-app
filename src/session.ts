@@ -1,7 +1,7 @@
 // Who is signed in, and the tokens that prove it.
 //
 //  - access token:  memory only; short-lived (`expires_in`)
-//  - refresh token: tokenStore.ts; swapped for a new pair by POST /auth/refresh
+//  - refresh token: tokenStore.ts (phone's secure storage); swapped for a new pair by POST /auth/refresh
 //  - Session:       the user fields the UI needs (and their school), persisted in AsyncStorage
 //  - last school code typed at sign-in: AsyncStorage, kept after sign-out so
 //    the login screen can fill it in
@@ -140,7 +140,8 @@ export async function loadSession(): Promise<Session | null> {
     refreshToken = null;
   }
   applyTheme(session);
-  await loadCache(cacheOwner(session));
+  // the refresh token seeds the offline cache's key on phones without a secure random source
+  await loadCache(cacheOwner(session), refreshToken ?? accessToken);
   return session;
 }
 
@@ -174,7 +175,8 @@ export async function applyAuthResponse(data: AuthResponse, { fresh }: { fresh: 
 
   const changed = !sameSession(session, next);
   session = next;
-  if (fresh) resetCache(cacheOwner(next)); // never show a previous user's data
+  // never show a previous user's data; the new tokens seed the new cache key (cache.ts)
+  if (fresh) resetCache(cacheOwner(next), `${data.refresh_token ?? ''}|${data.access_token}`);
   applyTheme(next);
   await Promise.all([persist(), rememberOrgCode(data.org_code)]);
   if (changed || fresh) emit();

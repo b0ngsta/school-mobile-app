@@ -2,6 +2,7 @@
 // the backend's error shapes turned into an ApiError with a user-facing
 // message. Knows nothing about sessions — api.ts adds tokens and refresh.
 import { API_URL, REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from './config';
+import { getDeviceId } from './device';
 import { t } from './i18n';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -39,10 +40,21 @@ export class ApiError extends Error {
   readonly requestId: string | null;
   /** Seconds to wait before retrying (429 Retry-After), if the server said. */
   readonly retryAfterSec: number | null;
+  /** Machine-readable `code` next to `detail`, if any (e.g. 428 "captcha_required"). */
+  readonly code: string | null;
+  /** Per-row problems next to `detail` (e.g. a results Excel upload: [{row, column, message}]). */
+  readonly errors: unknown[] | null;
 
   constructor(
     message: string,
-    opts: { status: number; detail?: unknown; requestId?: string | null; retryAfterSec?: number | null },
+    opts: {
+      status: number;
+      detail?: unknown;
+      requestId?: string | null;
+      retryAfterSec?: number | null;
+      code?: string | null;
+      errors?: unknown[] | null;
+    },
   ) {
     super(message);
     this.name = 'ApiError';
@@ -50,6 +62,8 @@ export class ApiError extends Error {
     this.detail = opts.detail;
     this.requestId = opts.requestId ?? null;
     this.retryAfterSec = opts.retryAfterSec ?? null;
+    this.code = opts.code ?? null;
+    this.errors = opts.errors ?? null;
   }
 
   get isNetwork(): boolean {
@@ -99,11 +113,13 @@ export function toApiError(status: number, body: any, headers: Pick<Headers, 'ge
     const wait = retryAfterSec != null ? t('err.waitFor', { wait: formatWait(retryAfterSec) }) : '';
     message = `${message || t('err.tooMany')}${wait}`;
   }
-  return new ApiError(message || t('err.request', { code: status }), { status, detail, requestId, retryAfterSec });
+  const code = typeof body?.code === 'string' ? body.code : null;
+  const errors = Array.isArray(body?.errors) ? body.errors : null;
+  return new ApiError(message || t('err.request', { code: status }), { status, detail, requestId, retryAfterSec, code, errors });
 }
 
 export async function send<T>(path: string, { method = 'GET', body, formData, token }: SendOptions = {}): Promise<HttpResponse<T>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', 'X-Device-Id': await getDeviceId() };
   if (token) headers.Authorization = `Bearer ${token}`;
   // multipart: let fetch set the boundary — do NOT set Content-Type
   if (body) headers['Content-Type'] = 'application/json';

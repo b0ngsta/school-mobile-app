@@ -46,6 +46,25 @@ export function fmtDayShort(d?: string | Date | null): string {
   return `${t(days[dt.getDay()])}, ${dt.getDate()} ${t('months')[dt.getMonth()]}`;
 }
 
+/** "Sunday, 25 Oct 2026" (localized weekday + month). */
+export function fmtDayLong(d?: string | Date | null): string {
+  const dt = parseDate(typeof d === 'string' ? d.slice(0, 10) : d ?? null);
+  if (!dt) return '—';
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return `${t(days[dt.getDay()])}, ${String(dt.getDate()).padStart(2, '0')} ${t('months')[dt.getMonth()]} ${dt.getFullYear()}`;
+}
+
+/** "06 Oct 2026, 3:08 PM" from an API timestamp (school time as written). */
+export function fmtDateTime(value?: string | null): string {
+  if (!value) return '—';
+  const s = String(value);
+  const dt = parseDate(s.slice(0, 10));
+  if (!dt) return s;
+  const time = s.length > 10 ? fmtTime(s) : '';
+  const day = `${String(dt.getDate()).padStart(2, '0')} ${t('months')[dt.getMonth()]} ${dt.getFullYear()}`;
+  return time && time !== '—' ? `${day}, ${time}` : day;
+}
+
 const HM = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*([ap]\.?m\.?)?$/i;
 
 /** Minutes since midnight from "07:05", "7:05:33", "07:05:33.123", "7:05 pm"; null when unreadable. */

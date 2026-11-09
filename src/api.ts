@@ -99,13 +99,44 @@ const withOrg = (orgCode: string | undefined, body: Record<string, unknown>) => 
   return code ? { org_code: code, ...body } : body;
 };
 
-export async function login(username: string, password: string, orgCode?: string): Promise<Session> {
-  const { data } = await send<AuthResponse>('/auth/login', {
-    method: 'POST',
-    body: withOrg(orgCode, { username, password }),
-  });
+/** A solved picture challenge for login() (see getCaptcha / needsCaptcha). */
+export interface CaptchaAnswer {
+  id: string;
+  answer: string;
+}
+
+export async function login(
+  username: string,
+  password: string,
+  orgCode?: string,
+  captcha?: CaptchaAnswer | null,
+): Promise<Session> {
+  // captcha_supported: after a few wrong passwords the server asks for the
+  // characters in a picture (428) instead of locking the account for everyone.
+  const body: Record<string, unknown> = { username, password, captcha_supported: true };
+  if (captcha) {
+    body.captcha_id = captcha.id;
+    body.captcha_answer = captcha.answer;
+  }
+  const { data } = await send<AuthResponse>('/auth/login', { method: 'POST', body: withOrg(orgCode, body) });
   return applyAuthResponse(data, { fresh: true });
 }
+
+/** The picture challenge the server asks for after repeated failed sign-ins. */
+export interface Captcha {
+  captcha_id: string;
+  /** data:image/png;base64,… */
+  image: string;
+  expires_in: number;
+  length: number;
+}
+
+export const getCaptcha = async (): Promise<Captcha> =>
+  (await send<Captcha>('/auth/captcha', { method: 'POST' })).data;
+
+/** login() failed because the picture is needed (first time, or the answer was wrong). */
+export const needsCaptcha = (e: unknown): boolean =>
+  e instanceof ApiError && e.status === 428 && (e.code === 'captcha_required' || e.code === 'captcha_invalid');
 
 /** The school's name for a code (404 = unknown code). */
 export const lookupSchool = async (orgCode: string): Promise<SchoolInfo> =>

@@ -1,8 +1,11 @@
-// Staff profile — account details, language toggle, password + sign-out.
+// Staff profile (teacher / driver / admin / principal / sub admin / coordinator) —
+// account details, language toggle, UI theme (the same ThemePicker as the
+// student Profile), password + sign-out.
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { photoUrl } from '../../api';
 import { AccountActions } from '../../components/AccountActions';
+import { ThemePicker } from '../../components/ThemePicker';
 import { Avatar, Card, ErrorBox, Screen, SectionTitle } from '../../components/ui';
 import { useApi, useI18n } from '../../hooks';
 import { LANGS } from '../../i18n';
@@ -58,6 +61,9 @@ export default function StaffProfile({ session, navigate, onLogout }: ScreenProp
           </TouchableOpacity>
         ))}
       </Card>
+
+      <SectionTitle>{t('Theme')}</SectionTitle>
+      <ThemePicker />
 
       <SectionTitle>{t('Account')}</SectionTitle>
       <AccountActions navigate={navigate} onLogout={onLogout} />

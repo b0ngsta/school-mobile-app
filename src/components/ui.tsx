@@ -10,7 +10,6 @@ import {
   Image,
   Modal,
   RefreshControl,
-  ScrollView,
   StyleProp,
   StyleSheet,
   Text,
@@ -24,6 +23,7 @@ import type { TextInputInstance } from 'react-native';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReduceMotion } from '../hooks';
+import { KeyboardAvoider, KeyboardScope, KeyboardScrollView, useKeyboard, useKeyboardFocusReporter, useKeyboardScroll } from './keyboard';
 import { statusLabel, t } from '../i18n';
 export { fmtDate, inr } from '../format';
 import { accent, Accent, badge, colors, radius, shadow } from '../theme';
@@ -99,9 +99,11 @@ interface ScreenViewProps {
   padded?: boolean;
 }
 
+/** Scrolling page. Keyboard-aware (components/keyboard.tsx): stays above the keyboard and scrolls the focused field into view. */
 export function Screen({ children, refreshing, onRefresh, padded = true }: ScreenViewProps) {
   return (
-    <ScrollView
+    <KeyboardScrollView
+      avoiderStyle={{ backgroundColor: colors.page }}
       style={{ flex: 1, backgroundColor: colors.page }}
       contentContainerStyle={padded ? styles.pad : null}
       keyboardShouldPersistTaps="handled"
@@ -111,7 +113,7 @@ export function Screen({ children, refreshing, onRefresh, padded = true }: Scree
         ) : undefined
       }>
       {children}
-    </ScrollView>
+    </KeyboardScrollView>
   );
 }
 
@@ -151,6 +153,7 @@ export function ListScreen<T>({
   onEndReached,
   loadingMore,
 }: ListScreenProps<T>) {
+  const kb = useKeyboardScroll();
   const listFooter =
     loadingMore || footer ? (
       <>
@@ -159,27 +162,35 @@ export function ListScreen<T>({
       </>
     ) : undefined;
   return (
-    <FlatList
-      data={data ?? []}
-      renderItem={({ item }) => renderItem(item)}
-      keyExtractor={item => String(keyExtractor(item))}
-      ListHeaderComponent={header ?? undefined}
-      ListFooterComponent={listFooter}
-      ListEmptyComponent={data ? empty ?? undefined : undefined}
-      style={{ flex: 1, backgroundColor: colors.page }}
-      contentContainerStyle={styles.pad}
-      keyboardShouldPersistTaps="handled"
-      initialNumToRender={10}
-      maxToRenderPerBatch={10}
-      windowSize={11}
-      onEndReached={onEndReached}
-      onEndReachedThreshold={0.5}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} colors={[colors.brand]} tintColor={colors.brand} />
-        ) : undefined
-      }
-    />
+    <KeyboardAvoider style={{ backgroundColor: colors.page }}>
+      <KeyboardScope value={kb.scope}>
+        <FlatList
+          ref={kb.ref as any}
+          onScroll={kb.scrollProps.onScroll}
+          scrollEventThrottle={kb.scrollProps.scrollEventThrottle}
+          keyboardDismissMode={kb.scrollProps.keyboardDismissMode}
+          data={data ?? []}
+          renderItem={({ item }) => renderItem(item)}
+          keyExtractor={item => String(keyExtractor(item))}
+          ListHeaderComponent={header ?? undefined}
+          ListFooterComponent={listFooter}
+          ListEmptyComponent={data ? empty ?? undefined : undefined}
+          style={{ flex: 1, backgroundColor: colors.page }}
+          contentContainerStyle={styles.pad}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} colors={[colors.brand]} tintColor={colors.brand} />
+            ) : undefined
+          }
+        />
+      </KeyboardScope>
+    </KeyboardAvoider>
   );
 }
 
@@ -315,9 +326,10 @@ interface ButtonProps {
   disabled?: boolean;
   small?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
-export function Button({ label, onPress, kind = 'primary', busy, disabled, small, style }: ButtonProps) {
+export function Button({ label, onPress, kind = 'primary', busy, disabled, small, style, testID }: ButtonProps) {
   const off = disabled || busy;
   const base: StyleProp<ViewStyle>[] = [styles.btn, small && styles.btnSmall, style];
   if (kind === 'primary') base.push({ backgroundColor: off ? colors.faint : colors.brand });
@@ -327,7 +339,7 @@ export function Button({ label, onPress, kind = 'primary', busy, disabled, small
   const fg =
     kind === 'primary' ? '#fff' : kind === 'danger' ? colors.danger : kind === 'soft' ? colors.brand : colors.ink;
   return (
-    <TouchableOpacity style={base} onPress={onPress} disabled={off} activeOpacity={0.75}>
+    <TouchableOpacity style={base} onPress={onPress} disabled={off} activeOpacity={0.75} testID={testID}>
       {busy ? (
         <ActivityIndicator color={fg} size="small" />
       ) : (
@@ -344,19 +356,31 @@ type InputProps = TextInputProps & {
   ref?: Ref<TextInputInstance>;
 };
 
-export function Input({ label, hint, style, ref, ...props }: InputProps) {
+export function Input({ label, hint, style, ref, onFocus, ...props }: InputProps) {
+  // Tells the surrounding Screen / Sheet to keep this field above the keyboard.
+  const reportFocus = useKeyboardFocusReporter();
   return (
     <View style={{ marginBottom: 12 }}>
       {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-      <TextInput ref={ref} style={[styles.input, style]} placeholderTextColor={colors.faint} {...props} />
+      <TextInput
+        ref={ref}
+        style={[styles.input, style]}
+        placeholderTextColor={colors.faint}
+        {...props}
+        onFocus={e => {
+          reportFocus?.();
+          onFocus?.(e);
+        }}
+      />
       {hint ? <Text style={styles.inputHint}>{hint}</Text> : null}
     </View>
   );
 }
 
 /** Password field with a show/hide eye. */
-export function PasswordInput({ label, hint, style, ref, ...props }: Omit<InputProps, 'secureTextEntry'>) {
+export function PasswordInput({ label, hint, style, ref, onFocus, ...props }: Omit<InputProps, 'secureTextEntry'>) {
   const [visible, setVisible] = useState(false);
+  const reportFocus = useKeyboardFocusReporter();
   return (
     <View style={{ marginBottom: 12 }}>
       {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
@@ -368,6 +392,10 @@ export function PasswordInput({ label, hint, style, ref, ...props }: Omit<InputP
           autoCapitalize="none"
           autoCorrect={false}
           {...props}
+          onFocus={e => {
+            reportFocus?.();
+            onFocus?.(e);
+          }}
           secureTextEntry={!visible}
         />
         <TouchableOpacity
@@ -442,10 +470,16 @@ interface SheetProps {
   error?: string | null;
 }
 
-/** Bottom-sheet style modal. */
+/**
+ * Bottom-sheet style modal. Keyboard-aware: a Modal is its own window, so it
+ * has its own KeyboardAvoider (the whole sheet rises above the keyboard and
+ * shrinks to fit on small phones) and its form scrolls to the focused field.
+ */
 export function Sheet({ visible, title, onClose, children, error }: SheetProps) {
   // Edge-to-edge: the modal draws under the gesture/nav bar, so lift the content above it.
-  const { bottom } = useSafeAreaInsets();
+  const { bottom, top } = useSafeAreaInsets();
+  // With the keyboard up the nav bar is under the keyboard — no inset needed there.
+  const keyboardUp = useKeyboard().top != null;
   return (
     <Modal
       visible={!!visible}
@@ -454,9 +488,9 @@ export function Sheet({ visible, title, onClose, children, error }: SheetProps) 
       onRequestClose={onClose}
       statusBarTranslucent
       navigationBarTranslucent>
-      <View style={styles.sheetBackdrop}>
+      <KeyboardAvoider style={[styles.sheetBackdrop, { paddingTop: top }]}>
         <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
-        <View style={[styles.sheet, { paddingBottom: 26 + bottom }]}>
+        <View style={[styles.sheet, { paddingBottom: keyboardUp ? 16 : 26 + bottom }]}>
           <View style={styles.sheetGrab} />
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
@@ -464,12 +498,12 @@ export function Sheet({ visible, title, onClose, children, error }: SheetProps) 
               <MCIcon name="close" size={18} color={colors.subtle} />
             </TouchableOpacity>
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 520 }}>
+          <KeyboardScrollView avoid={false} keyboardShouldPersistTaps="handled" style={styles.sheetScroll}>
             <ErrorBox message={error} />
             {children}
-          </ScrollView>
+          </KeyboardScrollView>
         </View>
-      </View>
+      </KeyboardAvoider>
     </Modal>
   );
 }
@@ -934,7 +968,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     padding: 18,
     paddingBottom: 26,
+    // Lets the sheet shrink (and its form scroll) when the keyboard leaves little room.
+    flexShrink: 1,
   },
+  sheetScroll: { maxHeight: 520, flexShrink: 1 },
   sheetGrab: {
     alignSelf: 'center',
     width: 40,

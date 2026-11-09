@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { photoUrl } from '../api';
 import { AccountActions } from '../components/AccountActions';
+import { ThemePicker } from '../components/ThemePicker';
 import { Avatar, Bone, Card, ErrorBox, Screen, SectionTitle, Skeleton, fmtDate } from '../components/ui';
 import { useApi, useI18n } from '../hooks';
 import { LANGS } from '../i18n';
@@ -65,6 +66,9 @@ export default function Profile({ navigate, onLogout, session }: ScreenProps) {
           </TouchableOpacity>
         ))}
       </Card>
+
+      <SectionTitle>{t('Theme')}</SectionTitle>
+      <ThemePicker />
 
       <SectionTitle>{t('Account')}</SectionTitle>
       <AccountActions navigate={navigate} onLogout={onLogout} />

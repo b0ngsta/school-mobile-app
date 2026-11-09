@@ -2,6 +2,7 @@
 // events green (exam on a Sunday/holiday still shows as holiday). Managers
 // tap a date to add/edit/delete a holiday; everyone else (incl. students)
 // views. Events/exams are managed from the web app's Calendar tab.
+// The month is switched from the header (‹ October 2026 ›, portal header).
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, errorText, peek } from '../api';
@@ -18,7 +19,8 @@ import {
   Sheet,
   fmtDate,
 } from '../components/ui';
-import { parseDate } from '../format';
+import { MonthSwitcher, Pill, PortalHeader, PortalSection } from '../components/portal';
+import { localIsoDate, parseDate } from '../format';
 import { MANAGER_ROLES } from '../roles';
 import { colors } from '../theme';
 import type { CalendarPayload, Holiday, ScreenProps } from '../types';
@@ -50,7 +52,7 @@ interface EditingDay {
   holiday?: Holiday;
 }
 
-export default function Holidays({ session }: ScreenProps) {
+export default function Holidays({ session, goBack }: ScreenProps) {
   const isStudent = session.user_type === 'student';
   const canEdit = MANAGER_ROLES.includes(session.user_type);
   const now = new Date();
@@ -177,7 +179,17 @@ export default function Holidays({ session }: ScreenProps) {
     ]);
   };
 
-  if (!items && !error) return <HolidaysSkeleton />;
+  const header = (
+    <PortalHeader
+      title={t('Holidays')}
+      onBack={goBack}
+      subtitle={items ? t(monthHolidayCount(items, year, month) === 1 ? '{n} holiday this month' : '{n} holidays this month',
+        { n: monthHolidayCount(items, year, month) }) : null}>
+      <MonthSwitcher label={t(MONTHS[month])} sub={String(year)} onPrev={prev} onNext={next} />
+    </PortalHeader>
+  );
+
+  if (!items && !error) return <HolidaysSkeleton header={header} />;
 
   // calendar grid
   const firstDay = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
@@ -201,21 +213,12 @@ export default function Holidays({ session }: ScreenProps) {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen refreshing={refreshing} onRefresh={() => load(true)}>
+      <Screen refreshing={refreshing} onRefresh={() => load(true)} padded={false}>
+        {header}
+        <View style={styles.body}>
         <ErrorBox message={error} />
 
         <Card>
-          {/* month header */}
-          <View style={styles.monthHead}>
-            <TouchableOpacity onPress={prev} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.nav, { color: colors.brand }]}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.monthTitle}>{t(MONTHS[month])} {year}</Text>
-            <TouchableOpacity onPress={next} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.nav, { color: colors.brand }]}>›</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* weekday header */}
           <View style={styles.week}>
             {WEEK.map(w => (
@@ -292,9 +295,11 @@ export default function Holidays({ session }: ScreenProps) {
           <Empty icon="🏖️" text={t('No holidays or events in {month}.', { month: t(MONTHS[month]) })} />
         ) : (
           <>
+            {monthHolidays.length > 0 && <PortalSection title={t('Holiday List')} count={monthHolidays.length} />}
             {monthHolidays.map(h => (
               <EventRow key={`h${h.id}`} tone={kindColors.holiday} date={h.date} title={h.name}
-                sub={`${fmtDate(h.date)}${h.description ? ` · ${h.description}` : ''}`} />
+                sub={`${fmtDate(h.date)}${h.description ? ` · ${h.description}` : ''}`}
+                done={String(h.date).slice(0, 10) < localIsoDate()} days={1} />
             ))}
             {monthExams.map(x => (
               <EventRow key={`x${x.id}`} tone={kindColors.exam} date={x.start_date}
@@ -308,6 +313,7 @@ export default function Holidays({ session }: ScreenProps) {
             ))}
           </>
         )}
+        </View>
       </Screen>
 
       <Sheet
@@ -330,16 +336,19 @@ export default function Holidays({ session }: ScreenProps) {
   );
 }
 
-// Shown while the calendar loads: the month card with placeholder days.
-function HolidaysSkeleton() {
+/** Holidays in the shown month (they come per year from the server). */
+function monthHolidayCount(items: Holiday[], year: number, month: number): number {
+  const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+  return items.filter(h => String(h.date).startsWith(prefix)).length;
+}
+
+// Shown while the calendar loads: the header, then the month card with placeholder days.
+function HolidaysSkeleton({ header }: { header: React.ReactNode }) {
   return (
+    <View style={{ flex: 1 }}>
+      {header}
     <ScreenSkeleton>
       <Card>
-        <View style={styles.monthHead}>
-          <Bone width={22} height={22} radius={11} />
-          <Bone width={130} height={16} />
-          <Bone width={22} height={22} radius={11} />
-        </View>
         <View style={styles.week}>
           {WEEK.map(w => (
             <View key={w} style={styles.weekBone}>
@@ -362,15 +371,20 @@ function HolidaysSkeleton() {
       </Card>
       <ListSkeleton icon lines={1} count={2} />
     </ScreenSkeleton>
+    </View>
   );
 }
 
-/** One row in the month list — colored date pill + title + subtitle. */
-function EventRow({ tone, date, title, sub }: {
+/** One row in the month list — colored date pill + title + subtitle (+ status chips for holidays). */
+function EventRow({ tone, date, title, sub, done, days }: {
   tone: { bg: string; fg: string };
   date: string;
   title: string;
   sub: string;
+  /** Holidays: already over (Completed) or still ahead (Upcoming). */
+  done?: boolean;
+  /** Holidays: how many days off. */
+  days?: number;
 }) {
   const d = parseDate(String(date).slice(0, 10)) ?? new Date();
   return (
@@ -384,15 +398,24 @@ function EventRow({ tone, date, title, sub }: {
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={{ fontSize: 14.5, fontWeight: '800', color: colors.ink }}>{title}</Text>
         <Text style={{ fontSize: 12, color: colors.subtle, marginTop: 1 }}>{sub}</Text>
+        {done !== undefined ? (
+          <View style={styles.chips}>
+            {done ? (
+              <Pill label={t('Completed')} fg={colors.subtle} bg={colors.page} />
+            ) : (
+              <Pill label={t('Upcoming')} fg={colors.ok} bg={colors.okSoft} />
+            )}
+            {days ? <Pill label={t(days === 1 ? '{n} day' : '{n} days', { n: days })} fg={colors.brand} bg={colors.brandSoft} /> : null}
+          </View>
+        ) : null}
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  monthHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  monthTitle: { fontSize: 16, fontWeight: '800', color: colors.ink },
-  nav: { fontSize: 26, fontWeight: '700', paddingHorizontal: 10 },
+  body: { padding: 16 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap' },
   week: { flexDirection: 'row', marginBottom: 4 },
   weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: colors.subtle },
   weekBone: { flex: 1, alignItems: 'center', paddingVertical: 3 },

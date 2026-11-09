@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { api, apiPage, errorText, peek, withQuery } from './api';
@@ -6,6 +6,73 @@ import { onAppResume } from './appEvents';
 import { PAGE_SIZE } from './config';
 import { getLang, setLang, subscribe, t } from './i18n';
 import type { SchoolTimings } from './types';
+import { getUiTheme, subscribeUiTheme } from './uiTheme';
+import type { UiTheme } from './uiTheme';
+import { getUpdatesVersion, hasNew, subscribeUpdates } from './updates';
+
+/** The UI theme picked in Profile (uiTheme.ts); re-renders the reader when it changes. */
+export function useUiTheme(): UiTheme {
+  return useSyncExternalStore(subscribeUiTheme, getUiTheme);
+}
+
+/**
+ * The home launchers' red "new" dots (updates.ts). Returns `hasNew(route)` and
+ * a `version` that changes whenever any dot does — put it in the deps of a
+ * memoised launcher list so only a real change redraws it.
+ */
+export function useUpdateDots(): { hasNew: (route: string) => boolean; version: number } {
+  const version = useSyncExternalStore(subscribeUpdates, getUpdatesVersion);
+  return { hasNew, version };
+}
+
+// ---- screen focus (provided per screen by components/ScreenStack) ----
+
+/** Whether a screen is on top and at rest — a tiny store, so changes re-render only the hooks that read it. */
+export interface ActiveStore {
+  get: () => boolean;
+  subscribe: (listener: () => void) => () => void;
+}
+
+export function createActiveStore(initial: boolean): ActiveStore & { set: (value: boolean) => void } {
+  let value = initial;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    subscribe: listener => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    set: next => {
+      if (next === value) return;
+      value = next;
+      listeners.forEach(l => l());
+    },
+  };
+}
+
+const ALWAYS_ACTIVE: ActiveStore = { get: () => true, subscribe: () => () => {} };
+export const ScreenActiveContext = createContext<ActiveStore>(ALWAYS_ACTIVE);
+
+/** True while this screen is on top and no transition is running (true outside a ScreenStack). */
+export function useScreenActive(): boolean {
+  const store = useContext(ScreenActiveContext);
+  return useSyncExternalStore(store.subscribe, store.get);
+}
+
+/** Runs `fn` each time this screen comes back to the top (not on first mount); never re-renders. */
+export function useOnReturn(fn: () => void): void {
+  const store = useContext(ScreenActiveContext);
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    let was = store.get();
+    return store.subscribe(() => {
+      const now = store.get();
+      if (now && !was) ref.current();
+      was = now;
+    });
+  }, [store]);
+}
 
 /** After this long in the background, data hooks re-fetch on resume
  *  (signed photo links expire, and the data has probably changed). */

@@ -10,18 +10,25 @@
 //     pop   the top screen slides away to the right while the one beneath
 //           slides back in and comes forward again
 //
-// Routes without a preset switch instantly, exactly as before. Mounting is
-// unchanged too: at rest only the top screen is mounted, a covered screen
-// unmounts when its push finishes and a revealed screen mounts fresh when its
-// pop starts, so screens still reload their data when you come back to them.
+// Routes without a preset switch instantly, exactly as before. Mounting: at
+// rest only the top screen is mounted, a covered screen unmounts when its push
+// finishes and a revealed screen mounts fresh when its pop starts, so screens
+// reload their data when you come back to them — EXCEPT the `persistentKey`
+// entry (the home): it stays mounted underneath, invisible (opacity 0, so
+// Android skips drawing it) and untouchable, so coming back to it costs
+// nothing. Every screen can ask whether it is on top and at rest
+// (hooks.ts → useScreenActive / useOnReturn) to pause work while covered and
+// refresh when it returns.
 //
 // Animations run on the native driver, so they stay smooth while the new
 // screen mounts and loads, and they are skipped when the OS asks for less
-// motion (iOS "Reduce Motion", Android "Remove animations").
+// motion (iOS "Reduce Motion", Android "Remove animations"). While a
+// transition runs, the moving screens are drawn into GPU textures once
+// (renderToHardwareTextureAndroid), so each frame only moves pictures.
 import React, { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { EasingFunction, StyleProp, ViewStyle } from 'react-native';
-import { useReduceMotion } from '../hooks';
+import { ScreenActiveContext, createActiveStore, useReduceMotion } from '../hooks';
 
 /** Transition presets a route can opt into (routes.ts → `transition`). */
 export type ScreenTransition = 'fadeScale';
@@ -160,6 +167,8 @@ interface ScreenStackProps<E> {
   backdropColor: string;
   /** Background of every screen. */
   screenColor: string;
+  /** Entry (the home) kept mounted, hidden, while other screens cover it. */
+  persistentKey?: string;
 }
 
 export function ScreenStack<E>({
@@ -169,6 +178,7 @@ export function ScreenStack<E>({
   renderScreen,
   backdropColor,
   screenColor,
+  persistentKey,
 }: ScreenStackProps<E>) {
   const { width } = useWindowDimensions();
   const reduceMotion = useReduceMotion();
@@ -206,33 +216,28 @@ export function ScreenStack<E>({
   }, [transition]);
 
   const top = state.entries[state.entries.length - 1];
+  const layer = (entry: E, props: Omit<ScreenLayerProps, 'color' | 'children'>) => (
+    <ScreenLayer key={`screen:${keyOf(entry)}`} color={screenColor} {...props}>
+      {renderScreen(entry)}
+    </ScreenLayer>
+  );
+  // The persistent entry (home) stays mounted at the bottom, hidden, whenever
+  // it is neither on top nor part of the running transition.
+  const keep = persistentKey === undefined ? undefined : state.entries.find(e => keyOf(e) === persistentKey);
+  const showing = (entry: E) =>
+    transition ? keyOf(transition.under) === keyOf(entry) || keyOf(transition.over) === keyOf(entry) : top !== undefined && keyOf(top) === keyOf(entry);
+
   const layers: ReactNode[] = [];
+  if (keep !== undefined && !showing(keep)) layers.push(layer(keep, { hidden: true }));
   if (transition && animated) {
     const push = transition.direction === 'push';
     layers.push(
-      <ScreenLayer
-        key={`screen:${keyOf(transition.under)}`}
-        color={screenColor}
-        style={[styles.card, animated.under]}
-        outgoing={push}>
-        {renderScreen(transition.under)}
-      </ScreenLayer>,
+      layer(transition.under, { style: [styles.card, animated.under], outgoing: push, moving: true }),
       <Animated.View key="scrim" pointerEvents="none" style={[styles.scrim, animated.scrim]} />,
-      <ScreenLayer
-        key={`screen:${keyOf(transition.over)}`}
-        color={screenColor}
-        style={[styles.card, styles.lifted, animated.over]}
-        outgoing={!push}
-        fading={push}>
-        {renderScreen(transition.over)}
-      </ScreenLayer>,
+      layer(transition.over, { style: [styles.card, styles.lifted, animated.over], outgoing: !push, fading: push, moving: true }),
     );
   } else if (top !== undefined) {
-    layers.push(
-      <ScreenLayer key={`screen:${keyOf(top)}`} color={screenColor}>
-        {renderScreen(top)}
-      </ScreenLayer>,
-    );
+    layers.push(layer(top, { active: true }));
   }
 
   return (
@@ -250,18 +255,29 @@ interface ScreenLayerProps {
   outgoing?: boolean;
   /** Fading in: composite offscreen so overlapping content fades as one. */
   fading?: boolean;
+  /** Part of a running transition: drawn once into a GPU texture, then only moved. */
+  moving?: boolean;
+  /** Kept mounted under the top screen: not drawn, not touchable, not read. */
+  hidden?: boolean;
+  /** On top and at rest (what useScreenActive reports). */
+  active?: boolean;
   children: ReactNode;
 }
 
 /** One full-size screen in the stack (keyed by its entry by the caller). */
-function ScreenLayer({ color, style, outgoing = false, fading = false, children }: ScreenLayerProps) {
+function ScreenLayer({ color, style, outgoing = false, fading = false, moving = false, hidden = false, active = false, children }: ScreenLayerProps) {
+  const [store] = useState(() => createActiveStore(active));
+  useEffect(() => store.set(active), [store, active]);
+  const away = outgoing || hidden;
   return (
     <Animated.View
-      style={[styles.screen, { backgroundColor: color }, style]}
+      style={[styles.screen, { backgroundColor: color }, style, hidden && styles.hidden]}
+      pointerEvents={hidden ? 'none' : 'auto'}
+      renderToHardwareTextureAndroid={moving}
       needsOffscreenAlphaCompositing={fading}
-      importantForAccessibility={outgoing ? 'no-hide-descendants' : 'auto'}
-      accessibilityElementsHidden={outgoing}>
-      {children}
+      importantForAccessibility={away ? 'no-hide-descendants' : 'auto'}
+      accessibilityElementsHidden={away}>
+      <ScreenActiveContext.Provider value={store}>{children}</ScreenActiveContext.Provider>
     </Animated.View>
   );
 }
@@ -274,4 +290,5 @@ const styles = StyleSheet.create({
   // Android shadow under the screen that moves on top.
   lifted: { elevation: 18 },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: '#05060F' },
+  hidden: { opacity: 0 },
 });

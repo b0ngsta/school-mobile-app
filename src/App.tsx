@@ -1,10 +1,13 @@
 // EduManage — app shell (multi-role, grid navigation like the mockups).
-// The header shows the school name + academic session; the home screen is a
-// role-specific tile grid and every feature is pushed on a tiny stack.
+// The home screen is the role's night-sky orbit launcher (components/orbit)
+// and every feature is pushed on a tiny stack; the home stays mounted under it.
 // Each stack entry renders as its own page (top bar + screen) inside
 // <ScreenStack>, which animates the routes that opt in (routes.ts).
 // Role themes (violet student / green teacher / blue admin) are applied at
 // login via applyRoleTheme(), so brand colors are read inline on render.
+// The UI theme (Profile → Theme: default / creative, uiTheme.ts) is loaded at
+// boot; student screens pick their file through screens/themed.tsx, and the
+// status / nav bar strips follow whichever home is showing.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -21,11 +24,13 @@ import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { getSession, loadSession, onSessionChange } from './api';
 import { startAppStateWatch } from './appEvents';
 import { ScreenStack } from './components/ScreenStack';
+import LaunchPopup from './components/LaunchPopup';
+import { HOME } from './components/orbit/palette';
 import { Loading } from './components/ui';
 // import { SCHOOL_NAME, sessionLabel } from './config';
-import { useI18n } from './hooks';
+import { useI18n, useUiTheme } from './hooks';
 import { loadLang, t } from './i18n';
-import { getUnread, onUnreadChange, startUnreadPolling, targetOf } from './notifications';
+import { startUnreadPolling, targetOf } from './notifications';
 import { initPush, stopPush } from './push';
 import { ForcedPasswordChange } from './screens/auth/ChangePassword';
 import ForgotPassword from './screens/auth/ForgotPassword';
@@ -34,6 +39,8 @@ import { SCREENS, homeForRole } from './routes';
 import type { RouteName, ScreenEntry } from './routes';
 import { colors } from './theme';
 import type { NavigateFn, RouteParams, Session } from './types';
+import { homeIsOrbit, loadUiTheme, resetUiTheme } from './uiTheme';
+import { markSeen, startUpdates } from './updates';
 
 interface StackEntry {
   /** Unique per push, so a screen keeps its identity while it animates. */
@@ -70,7 +77,9 @@ function AppShell() {
   const userKey = useRef<string | null>(null);
 
   // Re-render the whole app when the language changes (screens call t()).
-  useI18n();
+  const { lang } = useI18n();
+  // Re-paint the status/nav bar strips when the UI theme changes (orbit home or classic).
+  const uiTheme = useUiTheme();
 
   useEffect(() => {
     const stopWatch = startAppStateWatch();
@@ -82,10 +91,14 @@ function AppShell() {
         setStack([]); // a different user (or none) never inherits screens
         setAuthScreen('login');
       }
-      if (!s) setLoginNotice(reason === 'expired' ? t('err.sessionExpired') : null);
+      if (!s) {
+        setLoginNotice(reason === 'expired' ? t('err.sessionExpired') : null);
+        // The theme choice lasts one sign-in: the next login starts on the default theme.
+        resetUiTheme();
+      }
       setSession(s);
     });
-    Promise.all([loadSession(), loadLang()]).then(() => {
+    Promise.all([loadSession(), loadLang(), loadUiTheme()]).then(() => {
       const s = getSession();
       userKey.current = s ? `${s.user_type}:${s.user_id}` : null;
       setSession(s);
@@ -101,25 +114,38 @@ function AppShell() {
     // Notifications/pushes can name a route this build doesn't have — ignore those.
     if (!(route in SCREENS)) return;
     const key = `${route}-${++lastEntryId}`;
+    markSeen(route); // opening a screen clears its red "new" dot on the home (updates.ts)
     setStack(s => [...s, { key, route, params }]);
   }, []);
-  const goBack = useCallback(() => setStack(s => s.slice(0, -1)), []);
+  const goBack = useCallback(
+    () =>
+      setStack(s => {
+        // Leaving counts as seen too, so changes made in there don't light its own dot.
+        if (s.length) markSeen(s[s.length - 1].route);
+        return s.slice(0, -1);
+      }),
+    [],
+  );
 
   // Signed in: keep the bell's unread count fresh and register for pushes.
   const signedInKey = session && !session.must_change_password ? `${session.user_type}:${session.user_id}` : null;
   const isStudent = session?.user_type === 'student';
+  const orgCode = session?.org_code || '';
   useEffect(() => {
     if (!signedInKey) return undefined;
     const stopPolling = startUnreadPolling();
+    // Red "new" dots: load what this account already opened here, then the first check (cold start).
+    const stopUpdates = startUpdates(`${orgCode}:${signedInKey}`);
     initPush(data => {
       const target = targetOf({ type: data.type || '', data }, isStudent, () => true);
       if (target) navigate(target.route, target.params);
     });
     return () => {
       stopPolling();
+      stopUpdates();
       stopPush();
     };
-  }, [signedInKey, isStudent, navigate]);
+  }, [signedInKey, orgCode, isStudent, navigate]);
 
   // Android hardware back: pop the stack before exiting
   useEffect(() => {
@@ -143,6 +169,14 @@ function AppShell() {
     [homeRoute, stack],
   );
 
+  // On the night-sky orbit home, paint the status/nav bar strips to match it
+  // (the classic home has a brand-coloured header and the normal page colour).
+  // Portal screens draw their own brand header, so the strip above it matches it.
+  const atHomeRoot = stack.length === 0;
+  const atOrbitHome = atHomeRoot && !!session && homeIsOrbit(session.user_type, uiTheme);
+  const topScreen: ScreenEntry | undefined = atHomeRoot ? undefined : SCREENS[stack[stack.length - 1].route];
+  const topStrip = atOrbitHome ? HOME.skyTop : atHomeRoot || topScreen?.ownHeader ? colors.brand : colors.brandDark;
+
   if (!booted) return <Loading />;
   if (!session || session.must_change_password) {
     return (
@@ -162,7 +196,7 @@ function AppShell() {
   return (
     // Bottom inset is painted separately (page color) so the brand color only
     // shows behind the status bar, like the old opaque status bar did.
-    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safe, { backgroundColor: colors.brandDark }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safe, { backgroundColor: topStrip }]}>
       {/* StatusBar.backgroundColor is gone with edge-to-edge; the SafeAreaView behind it provides the color. */}
       <StatusBar barStyle="light-content" />
       <ScreenStack
@@ -171,17 +205,22 @@ function AppShell() {
         transitionOf={entryTransition}
         backdropColor={colors.brandDark}
         screenColor={colors.page}
+        persistentKey={HOME_KEY}
         renderScreen={entry => (
-          <Page entry={entry} session={session} navigate={navigate} goBack={goBack} onLogout={handleLogout} />
+          <StackPage entry={entry} lang={lang} session={session} navigate={navigate} goBack={goBack} onLogout={handleLogout} />
         )}
       />
-      <View style={{ height: insets.bottom, backgroundColor: colors.page }} />
+      <View style={{ height: insets.bottom, backgroundColor: atOrbitHome ? HOME.ground : colors.page }} />
+      {/* school announcements, once per app start (parents only) */}
+      {isStudent && signedInKey ? <LaunchPopup userKey={signedInKey} /> : null}
     </SafeAreaView>
   );
 }
 
 interface PageProps {
   entry: StackEntry;
+  /** current language — only so a language change redraws every page */
+  lang: string;
   session: Session;
   navigate: NavigateFn;
   goBack: () => void;
@@ -194,48 +233,24 @@ function Page({ entry, session, navigate, goBack, onLogout }: PageProps) {
   const screen: ScreenEntry = SCREENS[entry.route] || SCREENS[homeRoute];
   const ActiveScreen = screen.component;
   const atHome = entry.key === HOME_KEY;
+  // Hook (not a prop) so a theme switch repaints this page past StackPage's memo.
+  const orbit = homeIsOrbit(session.user_type, useUiTheme());
   const title =
     entry.params?.title || (screen.titleKey ? t(screen.titleKey) : screen.title ? t(screen.title) : 'EduManage');
-  const unread = useUnread();
-
   return (
     <>
-      {/* top bar — school branding on home, back+title inside */}
-      <View style={[styles.topbar, { backgroundColor: colors.brand }]}>
-        {!atHome && (
+      {/* top bar — back + title on pushed screens; home and `ownHeader` screens draw their own */}
+      {!atHome && !screen.ownHeader && (
+        <View style={[styles.topbar, { backgroundColor: colors.brand }]}>
           <TouchableOpacity onPress={goBack} style={styles.back} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <MCIcon name="arrow-left" size={22} color="#fff" />
           </TouchableOpacity>
-        )}
-        {atHome ? (
-          <>
-            <View style={styles.logo}>
-              <MCIcon name="school-outline" size={20} color="#fff" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              {/* <Text style={styles.topTitle}>{SCHOOL_NAME}</Text> */}
-              {/* <Text style={styles.topSub}>{sessionLabel()}</Text> */}
-            </View>
-            <TouchableOpacity
-              onPress={() => navigate('Notifications')}
-              style={styles.bell}
-              accessibilityLabel={unread ? t('{n} unread notifications', { n: unread }) : t('Notifications')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <MCIcon name="bell-outline" size={19} color="#fff" />
-              {unread > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>{unread > 99 ? '99+' : unread}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <Text style={[styles.topTitle, { flex: 1 }]} numberOfLines={1}>{title}</Text>
-        )}
-      </View>
+          <Text style={styles.topTitle} numberOfLines={1}>{title}</Text>
+        </View>
+      )}
 
       {/* screen */}
-      <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <View style={[styles.page, { backgroundColor: atHome && orbit ? HOME.skyTop : colors.page }]}>
         <ActiveScreen
           navigate={navigate}
           goBack={goBack}
@@ -248,28 +263,22 @@ function Page({ entry, session, navigate, goBack, onLogout }: PageProps) {
   );
 }
 
-/** Unread notification count for the bell. */
-function useUnread(): number {
-  const [n, setN] = useState(getUnread);
-  useEffect(() => onUnreadChange(setN), []);
-  return n;
-}
+/** Page, redrawn only when what it shows changes — pushing a screen doesn't re-render the (still mounted) home. */
+const StackPage = React.memo(
+  Page,
+  (a, b) =>
+    a.entry.key === b.entry.key &&
+    a.entry.route === b.entry.route &&
+    a.entry.params === b.entry.params &&
+    a.lang === b.lang &&
+    a.session === b.session &&
+    a.navigate === b.navigate &&
+    a.goBack === b.goBack &&
+    a.onLogout === b.onLogout,
+);
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  bellBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    backgroundColor: '#FFD43B',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellBadgeText: { color: '#171A26', fontSize: 10, fontWeight: '800' },
   topbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -277,22 +286,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   back: { marginRight: 12 },
-  bell: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topTitle: { color: '#fff', fontSize: 16.5, fontWeight: '800' },
+  topTitle: { flex: 1, color: '#fff', fontSize: 16.5, fontWeight: '800' },
+  page: { flex: 1 },
   topSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11.5, marginTop: 1 },
 });

@@ -1,6 +1,6 @@
 // Student detail for staff: profile + attendance summary + homework + remarks.
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { api, errorText, peek, photoUrl } from '../../api';
 import {
   Avatar,
@@ -20,11 +20,12 @@ import {
   Sheet,
   fmtDate,
 } from '../../components/ui';
+import { MANAGER_ROLES } from '../../roles';
 import { colors } from '../../theme';
 import type { AttendanceResponse, HomeworkItem, Remark, ScreenProps, StudentListItem } from '../../types';
 import { t } from '../../i18n';
 
-export default function StudentDetail({ params, navigate }: ScreenProps) {
+export default function StudentDetail({ params, navigate, session }: ScreenProps) {
   const { studentId } = params || {};
   const [student, setStudent] = useState<StudentListItem | null>(() => peek<StudentListItem>(`/students/${studentId}`));
   const [attendance, setAttendance] = useState<AttendanceResponse | null>(() => peek<AttendanceResponse>(`/students/${studentId}/attendance`));
@@ -36,6 +37,10 @@ export default function StudentDetail({ params, navigate }: ScreenProps) {
   const [addingRemark, setAddingRemark] = useState(false);
   const [busy, setBusy] = useState(false);
   const [remark, setRemark] = useState('');
+  /** null = adding a new remark; else the remark being edited */
+  const [editingId, setEditingId] = useState<number | null>(null);
+  // the server lets the teacher who wrote a remark (or managers) change it
+  const canChange = (r: Remark) => MANAGER_ROLES.includes(session.user_type) || r.created_by === session.user_id;
 
   const load = useCallback(async (r = false) => {
     r && setRefreshing(true);
@@ -55,12 +60,42 @@ export default function StudentDetail({ params, navigate }: ScreenProps) {
     load();
   }, [load]);
 
+  const openRemark = (r?: Remark) => {
+    setError(null);
+    setEditingId(r ? r.id : null);
+    setRemark(r ? r.remark : '');
+    setAddingRemark(true);
+  };
+
+  const deleteRemark = (r: Remark) =>
+    Alert.alert(t('Delete this remark?'), r.remark.slice(0, 120), [
+      { text: t('profile.cancel'), style: 'cancel' },
+      {
+        text: t('Delete'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api(`/students/${studentId}/remarks/${r.id}`, { method: 'DELETE' });
+            setRemarks(list => (list || []).filter(x => x.id !== r.id));
+            load();
+          } catch (e) {
+            setError(errorText(e));
+          }
+        },
+      },
+    ]);
+
   const addRemark = async () => {
     if (!remark.trim()) return setError(t('Remark is required'));
     setBusy(true);
     try {
-      await api(`/students/${studentId}/remarks`, { method: 'POST', body: { remark: remark.trim() } });
+      if (editingId != null) {
+        await api(`/students/${studentId}/remarks/${editingId}`, { method: 'PUT', body: { remark: remark.trim() } });
+      } else {
+        await api(`/students/${studentId}/remarks`, { method: 'POST', body: { remark: remark.trim() } });
+      }
       setAddingRemark(false);
+      setEditingId(null);
       setRemark('');
       load();
     } catch (e) {
@@ -149,20 +184,27 @@ export default function StudentDetail({ params, navigate }: ScreenProps) {
 
       {tab === 'remarks' && (
         <>
-          <Button label={t('+ Add remark')} kind="soft" small onPress={() => { setError(null); setAddingRemark(true); }} style={{ marginBottom: 10, alignSelf: 'flex-start' }} />
+          <Button label={t('+ Add remark')} kind="soft" small onPress={() => openRemark()} style={{ marginBottom: 10, alignSelf: 'flex-start' }} />
           {!remarks?.length && <Empty icon="📝" text={t('No remarks yet.')} />}
           {remarks?.map(r => (
             <Card key={r.id}>
               <Text style={{ color: colors.ink, fontSize: 14 }}>{r.remark}</Text>
-              <Text style={[styles.sub, { marginTop: 6 }]}>{r.by_name || ''} · {fmtDate(r.created_at)}</Text>
+              <Text style={[styles.sub, { marginTop: 6 }]}>{r.created_by_name || r.by_name || ''} · {fmtDate(r.created_at)}</Text>
+              {canChange(r) && (
+                <View style={styles.remarkActions}>
+                  <Button label={`✏️ ${t('Edit')}`} kind="soft" small onPress={() => openRemark(r)} testID={`remark-edit-${r.id}`} />
+                  <View style={{ width: 8 }} />
+                  <Button label={t('Delete')} kind="danger" small onPress={() => deleteRemark(r)} testID={`remark-delete-${r.id}`} />
+                </View>
+              )}
             </Card>
           ))}
         </>
       )}
 
-      <Sheet visible={addingRemark} title={t('Add remark')} onClose={() => setAddingRemark(false)} error={error}>
+      <Sheet visible={addingRemark} title={editingId != null ? t('Edit remark') : t('Add remark')} onClose={() => setAddingRemark(false)} error={error}>
         <Input label={t('Remark')} value={remark} onChangeText={setRemark} multiline style={{ minHeight: 80, textAlignVertical: 'top' }} />
-        <Button label={t('Add remark')} onPress={addRemark} busy={busy} />
+        <Button label={editingId != null ? t('Save changes') : t('Add remark')} onPress={addRemark} busy={busy} />
       </Sheet>
     </Screen>
   );
@@ -174,5 +216,6 @@ const styles = StyleSheet.create({
   sub: { fontSize: 12, color: colors.subtle, marginTop: 2 },
   attPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   rowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  remarkActions: { flexDirection: 'row', marginTop: 10 },
   rowTitle: { fontSize: 14, fontWeight: '700', color: colors.ink, flex: 1, paddingRight: 8 },
 });

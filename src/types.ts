@@ -90,7 +90,17 @@ export interface StudentProfile {
   address?: string | null;
 }
 
-export interface Notice {
+/** A file attached to a record (signed link — render it, never store it). */
+export interface AttachmentFields {
+  attachment_path?: string | null;
+  attachment_name?: string | null;
+  /** 'pdf' | 'image' (null on records without a file). */
+  attachment_type?: FileKind | null;
+}
+
+export type FileKind = 'pdf' | 'image';
+
+export interface Notice extends AttachmentFields {
   id: number;
   title: string;
   body: string;
@@ -98,10 +108,238 @@ export interface Notice {
   created_at: string;
 }
 
+/** The school shown in the student home header (part of /student/dashboard). */
+export interface DashboardSchool {
+  name: string;
+  code: string;
+  logo_path?: string | null;
+  /** Academic session label, e.g. "2026-2027". */
+  session: string;
+}
+
 export interface StudentDashboard {
   profile: StudentProfile;
+  /** Newer servers only. */
+  school?: DashboardSchool;
   attendance?: { percent: number | null };
   latest_notices?: Notice[];
+  /** How many full-syllabus files the class has (newer servers, Nov 2026); > 0 shows the Full Syllabus launcher. */
+  full_syllabus?: number;
+}
+
+/** GET /school — the School Info screen. */
+export interface SchoolProfile {
+  code: string;
+  name: string;
+  logo_path?: string | null;
+  director_name?: string | null;
+  principal_name?: string | null;
+  affiliation_no?: string | null;
+  phone?: string | null;
+  tel?: string | null;
+  email?: string | null;
+  website?: string | null;
+  address?: string | null;
+  session_start_month: number;
+  session: { label: string; start: string; end: string };
+}
+
+/** GET /student/announcements — the app-launch popup. */
+export interface Announcement {
+  id: number;
+  title: string;
+  body?: string | null;
+  starts_on?: string | null;
+  ends_on?: string | null;
+  created_at: string;
+  images: { id: number; image_path: string }[];
+}
+
+export interface AttendanceMonth {
+  year: number;
+  month: number; // 1-12
+  days: number;
+  sundays: number;
+  holidays: number;
+  working_days: number;
+  present: number;
+  absent: number;
+  half_day: number;
+  leave: number;
+  percent: number | null;
+}
+
+/** GET /student/attendance/overview */
+export interface AttendanceOverview {
+  session: { label: string; start: string; end: string };
+  totals: {
+    working_days: number;
+    present: number;
+    absent: number;
+    half_day: number;
+    leave: number;
+    holidays: number;
+    percent: number | null;
+  };
+  /** Session start … this month, oldest first. */
+  months: AttendanceMonth[];
+}
+
+export type AttendanceDayStatus = 'present' | 'absent' | 'leave' | 'half_day' | 'holiday' | 'sunday' | 'not_marked';
+
+/** GET /student/attendance/month?year=&month= */
+export interface AttendanceMonthDetail {
+  year: number;
+  month: number;
+  days: { date: string; status: AttendanceDayStatus; holiday?: string | null }[];
+  summary: { present: number; half_day: number; absent: number; leave: number; holiday: number; not_marked: number };
+  working_days: number;
+  percent: number | null;
+}
+
+/** GET /student/homework/subjects */
+export interface HomeworkSubject {
+  subject: string;
+  count: number;
+  last_given: string | null;
+}
+
+/** Timetable / syllabus file shared by the school. */
+export interface SchoolDocument extends AttachmentFields {
+  id: number;
+  kind: 'timetable' | 'syllabus';
+  title: string;
+  note?: string | null;
+  subject?: string | null;
+  class_name?: string | null;
+  section_name?: string | null;
+  uploaded_by?: string | null;
+  created_at: string;
+}
+
+export interface SyllabusSubject {
+  subject: string;
+  documents: SchoolDocument[];
+}
+
+/** A message from the school to this parent. */
+export interface StudentMessage extends AttachmentFields {
+  id: number;
+  title: string;
+  body: string;
+  audience: 'students' | 'section' | 'class' | 'school';
+  audience_label: string;
+  created_at: string;
+  read_at: string | null;
+  sender_name?: string | null;
+  sender_role?: Role | null;
+  photo_path?: string | null;
+}
+
+export interface EventMedia {
+  id: number;
+  kind: 'image' | 'video';
+  media_path?: string | null;
+  url?: string | null;
+  caption?: string | null;
+}
+
+export interface SchoolEvent {
+  id: number;
+  title: string;
+  description?: string | null;
+  venue?: string | null;
+  start_date: string;
+  end_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  status: 'upcoming' | 'completed';
+  media: EventMedia[];
+}
+
+/** GET /student/transport (null when the child doesn't use school transport). */
+export interface StudentTransport {
+  vehicle_id: number;
+  vehicle_no: string;
+  vehicle_type: 'bus' | 'van' | 'other';
+  route_name?: string | null;
+  status: 'active' | 'maintenance';
+  shift_name?: string | null;
+  shift_start?: string | null;
+  shift_end?: string | null;
+  driver_name: string;
+  driver_phone?: string | null;
+  driver_photo?: string | null;
+  stop_name?: string | null;
+  pickup_time?: string | null;
+  drop_time?: string | null;
+}
+
+/** GET /driver/routine — one student on a driver's shift (stop_no = 1, 2, 3 … in stop order). */
+export interface RoutineStudent {
+  student_id: number;
+  full_name: string;
+  photo_path?: string | null;
+  class_name?: string | null;
+  section_name?: string | null;
+  roll_no?: string | null;
+  stop_no: number;
+  stop_time?: string | null;
+  stop_name?: string | null;
+  address?: string | null;
+  landmark?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  notes?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  guardian_phone?: string | null;
+  student_phone?: string | null;
+}
+
+/** GET /driver/routine — one trip of the driver's vehicle (`id` null = the vehicle's old single shift). */
+export interface RoutineShift {
+  key: string;
+  id: number | null;
+  name: string;
+  trip_type: 'pickup' | 'drop';
+  start_time?: string | null;
+  end_time?: string | null;
+  weekdays: number[];
+  is_active: boolean;
+  vehicle: {
+    id: number;
+    vehicle_no: string;
+    vehicle_type: 'bus' | 'van' | 'other';
+    route_name?: string | null;
+    status: 'active' | 'maintenance';
+    capacity?: number | null;
+  };
+  student_count: number;
+  students: RoutineStudent[];
+}
+
+/** GET /driver/routine?date= — the signed-in driver's day. */
+export interface DriverRoutine {
+  date: string;
+  weekday: number;
+  is_today: boolean;
+  server_time: string;
+  holiday?: string | null;
+  vehicles: RoutineShift['vehicle'][];
+  shifts: RoutineShift[];
+}
+
+/** GET /student/teachers */
+export interface SubjectTeacher {
+  id: number;
+  full_name: string;
+  email?: string | null;
+  photo_path?: string | null;
+  designation?: string | null;
+  qualification?: string | null;
+  subjects: string[];
+  is_class_teacher: boolean;
 }
 
 export interface AttendanceSummary {
@@ -121,8 +359,9 @@ export interface AttendanceResponse {
   records?: AttendanceRecord[];
 }
 
-export interface HomeworkItem {
+export interface HomeworkItem extends AttachmentFields {
   id: number;
+  created_at?: string;
   title: string;
   note?: string | null;
   due_date: string;
@@ -134,6 +373,15 @@ export interface HomeworkItem {
   homework_id?: number | null;
 }
 
+/** One subject's result in a published exam (backend migration 0015). */
+export interface ExamSubjectResult {
+  subject: string;
+  marks: number | null;
+  max_marks: number | null;
+  grade?: string | null;
+  remarks?: string | null;
+}
+
 export interface Exam {
   id: number;
   name: string;
@@ -141,9 +389,17 @@ export interface Exam {
   start_date: string;
   end_date: string;
   results_published?: boolean;
+  /** Whole-exam marks; when only subject marks were entered, the server sends their total here. */
   marks?: number | null;
+  /** Out of (null = not set). */
+  max_marks?: number | null;
   grade?: string | null;
   remarks?: string | null;
+  /** Subject-wise marks (older servers: missing). */
+  subjects?: ExamSubjectResult[];
+  /** Sum of the subject marks entered, and of their maximums (null when unknown). */
+  total?: number | null;
+  max_total?: number | null;
 }
 
 export interface ReportCard {
@@ -158,7 +414,11 @@ export interface ReportCard {
 export interface Remark {
   id: number;
   remark: string;
-  by_name: string;
+  /** /student/remarks */
+  by_name?: string;
+  /** /students/{id}/remarks (staff): who wrote it — they (or managers) may edit / delete it. */
+  created_by?: number | null;
+  created_by_name?: string | null;
   created_at: string;
 }
 
@@ -328,6 +588,122 @@ export interface AdminExam {
   results_published?: boolean;
   paper_count?: number;
   classes?: ExamClassSummary[];
+  sections?: ExamSectionSummary[];
+}
+
+export interface ExamSectionSummary {
+  id: number;
+  name: string;
+  class_id: number;
+  class_name: string;
+  student_count: number;
+}
+
+/** GET /exams/{id}/results/sheet — every subject's marks for one section (Nov 2026). */
+export interface ResultsSheet {
+  exam: { id: number; name: string; status: string; results_published: boolean | number; max_marks: number | null };
+  section: { id: number; class_id: number; class_name?: string; section_name?: string };
+  subjects: { name: string; max_marks: number | null }[];
+  students: {
+    student_id: number;
+    full_name: string;
+    photo_path?: string | null;
+    roll_no?: string | null;
+    admission_no?: string | null;
+    /** subject → marks, 'AB' (absent) or null (not entered) */
+    marks: Record<string, number | 'AB' | null>;
+    remarks?: string | null;
+    total: number | null;
+    max_total: number | null;
+    percentage: number | null;
+  }[];
+  /** Class teacher of the section, or managers: may download the Excel template and upload it. */
+  can_import: boolean;
+}
+
+export interface ResultsImportReport {
+  saved: boolean;
+  students: number;
+  marks: number;
+  absent: number;
+  remarks: number;
+  /** the maximum typed in the upload form */
+  max_marks?: number;
+  /** a successful upload publishes the exam's results */
+  published?: boolean;
+  subjects: string[];
+}
+
+/* ------------------------- performance report (Nov 2026) ------------------------- */
+
+export interface PerfExam {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  obtained: number;
+  max_total: number;
+  percentage: number;
+  grade: string | null;
+  class_average: number | null;
+  class_highest: number | null;
+  rank: number | null;
+  class_size: number;
+}
+
+export interface PerfSubjectExam {
+  exam_id: number;
+  exam: string;
+  marks: number | null;
+  max_marks: number;
+  absent: boolean;
+  percentage: number | null;
+  grade: string | null;
+  class_average: number | null;
+}
+
+export interface PerfSubject {
+  subject: string;
+  obtained: number;
+  max_total: number;
+  percentage: number | null;
+  grade: string | null;
+  class_average: number | null;
+  class_highest: number | null;
+  vs_class: number | null;
+  rank: number | null;
+  class_size: number;
+  /** last exam % − first exam % (null with fewer than 2 exams) */
+  trend: number | null;
+  exams: PerfSubjectExam[];
+}
+
+export interface PerfInsight {
+  kind: 'strongest' | 'focus' | 'above_average' | 'below_average' | 'improved' | 'trend_up' | 'trend_down' | string;
+  title: string;
+  text: string;
+  subject?: string;
+}
+
+/** GET /student/performance */
+export interface PerformanceReport {
+  session: { label: string; start: string; end: string };
+  grades: { min: number; grade: string }[];
+  overall: {
+    obtained: number;
+    max_total: number;
+    percentage: number | null;
+    grade: string | null;
+    rank: number | null;
+    class_size: number;
+    class_average: number | null;
+    vs_class: number | null;
+    exams_count: number;
+    subjects_count: number;
+  } | null;
+  exams: PerfExam[];
+  subjects: PerfSubject[];
+  insights: PerfInsight[];
 }
 
 export interface ExamStats {

@@ -202,7 +202,7 @@ export default function MarkAttendance({ params, session }: ScreenProps) {
   );
 }
 
-/** One student's P / A / L toggles; memoised so only the tapped row re-renders. */
+/** One student's P / A / L / H (half day) toggles; memoised so only the tapped row re-renders. */
 const AttendanceRow = memo(function AttendanceRow({
   row: r,
   onSet,
@@ -221,6 +221,7 @@ const AttendanceRow = memo(function AttendanceRow({
           <Chip label={t('P')} tone="ok" active={r.status === 'present'} onPress={() => onSet(r.student_id, 'present')} />
           <Chip label={t('A')} tone="danger" active={r.status === 'absent'} onPress={() => onSet(r.student_id, 'absent')} />
           <Chip label={t('L')} active={r.status === 'leave'} onPress={() => onSet(r.student_id, 'leave')} />
+          <Chip label={t('H')} active={r.status === 'half_day'} onPress={() => onSet(r.student_id, 'half_day')} />
         </View>
       </View>
     </Card>

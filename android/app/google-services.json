@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "326901647483",
+    "project_id": "edumanage-push",
+    "storage_bucket": "edumanage-push.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:326901647483:android:1cc4eecfc0233c91c03ade",
+        "android_client_info": {
+          "package_name": "com.shelfwatchstudent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-GQ-UcSYu5GIPlbMyPXYS_s5WG8uPPQ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -2,10 +2,11 @@
 // forced password change: logo, title, subtitle and one card. Restyle the
 // whole pre-login experience here.
 import React, { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { t } from '../i18n';
 import { colors, radius, shadow } from '../theme';
+import { KeyboardScrollView } from './keyboard';
 
 interface AuthLayoutProps {
   title: string;
@@ -21,31 +22,31 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ title, subtitle, top, onBack, children, footer }: AuthLayoutProps) {
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        style={[styles.flex, { backgroundColor: colors.page }]}
-        contentContainerStyle={styles.page}
-        keyboardShouldPersistTaps="handled">
-        {onBack ? (
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.back}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel={t('Back')}>
-            <MCIcon name="arrow-left" size={22} color={colors.ink} />
-          </TouchableOpacity>
-        ) : null}
-        {top}
-        <View style={[styles.logo, { backgroundColor: colors.brand }, shadow.card]}>
-          <MCIcon name="school-outline" size={30} color="#fff" />
-        </View>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-        <View style={[styles.card, shadow.card]}>{children}</View>
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    // Keyboard-aware on iOS and Android (components/keyboard.tsx): the form stays above the keyboard.
+    <KeyboardScrollView
+      avoiderStyle={{ backgroundColor: colors.page }}
+      style={[styles.flex, { backgroundColor: colors.page }]}
+      contentContainerStyle={styles.page}
+      keyboardShouldPersistTaps="handled">
+      {onBack ? (
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.back}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('Back')}>
+          <MCIcon name="arrow-left" size={22} color={colors.ink} />
+        </TouchableOpacity>
+      ) : null}
+      {top}
+      <View style={[styles.logo, { backgroundColor: colors.brand }, shadow.card]}>
+        <MCIcon name="school-outline" size={30} color="#fff" />
+      </View>
+      <Text style={styles.title}>{title}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <View style={[styles.card, shadow.card]}>{children}</View>
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
+    </KeyboardScrollView>
   );
 }
 

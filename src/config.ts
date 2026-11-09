@@ -16,6 +16,15 @@ export const REQUEST_TIMEOUT_MS = 60_000;
 /** File uploads get longer. */
 export const UPLOAD_TIMEOUT_MS = 120_000;
 
+/**
+ * Firebase push notifications (push.ts). ON since Oct 2026: Firebase project
+ * "edumanage-push" — android/app/google-services.json + the google-services
+ * Gradle plugin + POST_NOTIFICATIONS are wired in
+ * (docs/TESTING_PUSH_NOTIFICATIONS.md). Turning it on without that config makes
+ * Firebase fail at start-up. false = in-app inbox only.
+ */
+export const PUSH_ENABLED = true;
+
 /** Rows per page for paginated lists (the server accepts 1–500). */
 export const PAGE_SIZE = 30;
 

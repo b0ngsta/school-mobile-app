@@ -1,19 +1,29 @@
 // In-app notification inbox: unread count for the bell + helpers to open
 // what a notification points at. Push (FCM) delivery is wired in push.ts;
-// this module works with or without it (the bell polls while the app is open).
+// this module works with or without it.
+//
+// The bell's count is re-read while the app is OPEN only: never in the
+// background (the next resume re-reads it at once), every minute without
+// push, and only every few minutes once push works on this phone (a push
+// arriving in the foreground re-reads it straight away — push.ts).
 import { api } from './api';
-import { onAppResume } from './appEvents';
+import { isAppInForeground, onAppBackground, onAppResume } from './appEvents';
 import type { RouteName } from './routes';
 import type { AppNotification, RouteParams } from './types';
 
 type Listener = (count: number) => void;
 
 let unread = 0;
-let timer: ReturnType<typeof setInterval> | null = null;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let polling = false;
+let pushActive = false;
 let supported = true; // flips off when the backend has no /notifications yet
 const listeners = new Set<Listener>();
 
-const POLL_MS = 60_000;
+/** Re-read interval while the app is open and push isn't working. */
+export const POLL_MS = 60_000;
+/** Re-read interval once push is registered on this phone. */
+export const POLL_WITH_PUSH_MS = 5 * 60_000;
 
 export const getUnread = (): number => unread;
 
@@ -42,17 +52,45 @@ export async function refreshUnread(): Promise<void> {
   }
 }
 
+function stopTimer(): void {
+  if (timer) clearTimeout(timer);
+  timer = null;
+}
+
+/** Plan the next re-read (none while in the background or signed out). */
+function scheduleNext(): void {
+  stopTimer();
+  if (!polling || !isAppInForeground()) return;
+  timer = setTimeout(async () => {
+    timer = null;
+    await refreshUnread();
+    scheduleNext();
+  }, pushActive ? POLL_WITH_PUSH_MS : POLL_MS);
+}
+
+/** push.ts: pushes reach this phone (true) or stopped (false). */
+export function setPushActive(active: boolean): void {
+  if (pushActive === active) return;
+  pushActive = active;
+  if (polling) scheduleNext();
+}
+
 /** Start polling while signed in. Returns a stop function. */
 export function startUnreadPolling(): () => void {
   supported = true;
+  polling = true;
   refreshUnread();
-  timer && clearInterval(timer);
-  timer = setInterval(refreshUnread, POLL_MS);
-  const offResume = onAppResume(() => refreshUnread());
+  scheduleNext();
+  const offResume = onAppResume(() => {
+    refreshUnread();
+    scheduleNext();
+  });
+  const offBackground = onAppBackground(stopTimer);
   return () => {
-    timer && clearInterval(timer);
-    timer = null;
+    polling = false;
+    stopTimer();
     offResume();
+    offBackground();
     setUnread(0);
   };
 }
@@ -79,6 +117,10 @@ const TYPE_ROUTES: Record<string, { staff: RouteName; student: RouteName }> = {
   leave: { staff: 'Leaves', student: 'Notices' },
   substitution_request: { staff: 'Substitutions', student: 'Notices' },
   substitution_update: { staff: 'Substitutions', student: 'Notices' },
+  message: { staff: 'Notifications', student: 'Messages' },
+  event: { staff: 'Notifications', student: 'Events' },
+  timetable: { staff: 'Notifications', student: 'StudentTimetable' },
+  syllabus: { staff: 'Notifications', student: 'Syllabus' },
 };
 
 /** Where tapping a notification (in the inbox or from a push) should go. */

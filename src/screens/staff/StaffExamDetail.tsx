@@ -1,5 +1,7 @@
 // Exam detail: the classes this exam applies to. Tap a class → upload/view
 // its subject-wise question papers. Managers can publish/unpublish results.
+// "Results" (Nov 2026): one row per section → ExamResultsSheet (every
+// subject's marks; the class teacher uploads them from an Excel sheet).
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, errorText } from '../../api';
@@ -20,7 +22,8 @@ import {
 } from '../../components/ui';
 import { MANAGER_ROLES } from '../../roles';
 import { colors } from '../../theme';
-import type { AdminExam, ScreenProps } from '../../types';
+import type { AdminExam, Assignment, ScreenProps } from '../../types';
+import { useApi } from '../../hooks';
 import { t } from '../../i18n';
 
 export default function StaffExamDetail({ navigate, params, session }: ScreenProps) {
@@ -30,6 +33,7 @@ export default function StaffExamDetail({ navigate, params, session }: ScreenPro
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const mine = useApi<Assignment[]>(isManager ? null : '/assignments/mine');
 
   const load = useCallback(async (r = false) => {
     r && setRefreshing(true);
@@ -102,6 +106,40 @@ export default function StaffExamDetail({ navigate, params, session }: ScreenPro
               style={{ marginBottom: 12 }}
             />
           )}
+
+          {(() => {
+            const sections = (exam.sections || []).filter(
+              sec => isManager || (mine.data || []).some(a => a.section_id === sec.id));
+            if (!sections.length) return null;
+            return (
+              <>
+                <SectionTitle>{t('Results — tap a section')}</SectionTitle>
+                {sections.map(sec => {
+                  const classTeacher = (mine.data || []).some(a => a.section_id === sec.id && a.role === 'class_teacher');
+                  return (
+                    <TouchableOpacity key={`sec-${sec.id}`} activeOpacity={0.7} testID={`exam-section-${sec.id}`}
+                      onPress={() => navigate('ExamResultsSheet', {
+                        examId, sectionId: sec.id, title: `${sec.class_name} ${sec.name} · ${t('Results')}`,
+                      })}>
+                      <Card style={styles.classRow}>
+                        <View style={[styles.iconBubble, { backgroundColor: colors.okSoft }]}>
+                          <Text style={{ fontSize: 17 }}>📊</Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.className}>{sec.class_name} · {t('Section {name}', { name: sec.name })}</Text>
+                          <Text style={styles.classSub}>
+                            🧑‍🎓 {t('{n} students', { n: sec.student_count })}
+                            {isManager || classTeacher ? ` · ⬆️ ${t('Excel upload')}` : ''}
+                          </Text>
+                        </View>
+                        <Text style={{ color: colors.faint, fontSize: 20 }}>›</Text>
+                      </Card>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            );
+          })()}
 
           <SectionTitle>{t('Classes — tap to manage subject papers')}</SectionTitle>
           {exam.classes?.length === 0 && <Empty icon="🏫" text={t('No classes yet.')} />}

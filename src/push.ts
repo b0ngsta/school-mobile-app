@@ -1,28 +1,36 @@
 // Push notifications (Firebase Cloud Messaging).
 //
 // The server sends a push for: attendance marked (to the student's parents),
-// fee created / due / overdue / paid, new notices, homework, leave reviews and
-// every substitution event (see BACKEND_README.md → "Notifications").
+// fee created / due / overdue / paid, new notices, homework, leave reviews,
+// every substitution event, and (student portal) timetable / syllabus files,
+// messages and events (backend app/services/notify.py). Each push carries
+// data { type, route, params (JSON string) } — route is the screen to open.
 // The same events also land in the in-app inbox (notifications.ts), so the
 // app is useful before push is switched on.
 //
 // Switching push on needs the school's own Firebase project, so it can't be
-// pre-wired here. Steps (≈10 min):
-//   1. npm i @react-native-firebase/app @react-native-firebase/messaging
-//   2. Firebase console → add Android app "com.shelfwatchstudent" → download
+// pre-wired here. The packages (@react-native-firebase/app + messaging) are
+// already in package.json. Full step-by-step + testing guide:
+// docs/TESTING_PUSH_NOTIFICATIONS.md. In short:
+//   1. Firebase console → add Android app "com.shelfwatchstudent" → download
 //      google-services.json into android/app/
-//   3. android/build.gradle  dependencies { classpath("com.google.gms:google-services:4.4.2") }
+//   2. android/build.gradle  dependencies { classpath("com.google.gms:google-services:4.4.2") }
 //      android/app/build.gradle  add `apply plugin: "com.google.gms.google-services"` at the bottom
-//   4. AndroidManifest.xml: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-//   5. Replace the body of `loadMessaging()` below with:
-//        return require('@react-native-firebase/messaging').default;
-//   6. Rebuild the APK (npm run apk).
+//   3. AndroidManifest.xml: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+//   4. src/config.ts: PUSH_ENABLED = true
+//   5. Rebuild the APK (npm run apk); backend: FIREBASE_CREDENTIALS = the same project's service account.
 // Nothing else changes: App.tsx already calls initPush() after sign-in and
-// stopPush() on sign-out.
+// stopPush() on sign-out; index.js registers the background handler.
+//
+// Behaviour by app state: foreground → no system banner, the bell's unread
+// count refreshes (onMessage); background / killed → Android shows the
+// notification, tapping it opens `route` (onNotificationOpenedApp /
+// getInitialNotification — the latter after sign-in, when initPush runs).
 import { PermissionsAndroid, Platform } from 'react-native';
 import { api } from './api';
+import { PUSH_ENABLED } from './config';
 import { send } from './http';
-import { refreshUnread } from './notifications';
+import { refreshUnread, setPushActive } from './notifications';
 
 /** Minimal slice of @react-native-firebase/messaging that we use. */
 interface RemoteMessage {
@@ -40,9 +48,49 @@ interface Messaging {
 }
 type MessagingFactory = () => Messaging;
 
-/** Returns the Firebase messaging module once it's installed (step 5 above). */
+/**
+ * @react-native-firebase/messaging v26 has only the modular API (getMessaging()
+ * + functions taking the instance — no default export any more), so wrap it
+ * in the small Messaging shape above. Required lazily, only when push is on.
+ */
+function firebaseMessaging(): MessagingFactory | null {
+  if (!PUSH_ENABLED) return null;
+  try {
+    const m = require('@react-native-firebase/messaging');
+    return () => {
+      const inst = m.getMessaging();
+      return {
+        requestPermission: () => m.requestPermission(inst),
+        getToken: () => m.getToken(inst),
+        deleteToken: () => m.deleteToken(inst),
+        onTokenRefresh: (fn: (token: string) => void) => m.onTokenRefresh(inst, fn),
+        onMessage: (fn: (msg: RemoteMessage) => void) => m.onMessage(inst, fn),
+        onNotificationOpenedApp: (fn: (msg: RemoteMessage) => void) => m.onNotificationOpenedApp(inst, fn),
+        getInitialNotification: () => m.getInitialNotification(inst),
+      };
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The Firebase messaging module, or null while push is off (config.ts PUSH_ENABLED). */
 function loadMessaging(): MessagingFactory | null {
-  return null;
+  return firebaseMessaging();
+}
+
+/**
+ * index.js, before AppRegistry: lets Android deliver pushes while the app is
+ * in the background / killed without the "no background message handler"
+ * warning. The system tray shows `notification` messages by itself; the bell
+ * catches up on the next start/resume (notifications.ts polling).
+ */
+export function registerBackgroundPushHandler(): void {
+  if (!PUSH_ENABLED) return;
+  try {
+    const m = require('@react-native-firebase/messaging');
+    m.setBackgroundMessageHandler(m.getMessaging(), async () => {});
+  } catch {}
 }
 
 /** What a tapped push should open: { route, params } from its data payload. */
@@ -66,7 +114,13 @@ function parseData(m?: RemoteMessage | null) {
 
 async function register(t: string) {
   token = t;
-  await api('/devices', { method: 'POST', body: { token: t, platform: Platform.OS } }).catch(() => {});
+  // Debug builds print the token for testing (Metro / `adb logcat | grep FCM`); see docs/TESTING_PUSH_NOTIFICATIONS.md.
+  if (__DEV__) console.log(`[push] FCM token: ${t}`);
+  try {
+    await api('/devices', { method: 'POST', body: { token: t, platform: Platform.OS } });
+    // the server knows this phone: the bell needn't be polled every minute
+    setPushActive(true);
+  } catch {}
 }
 
 /** Ask permission, register this device with the server and listen for pushes. */
@@ -95,6 +149,7 @@ export async function initPush(onOpen: PushOpenHandler): Promise<void> {
 export async function stopPush(): Promise<void> {
   unsubs.forEach(u => u());
   unsubs = [];
+  setPushActive(false);
   if (!token) return;
   const old = token;
   token = null;

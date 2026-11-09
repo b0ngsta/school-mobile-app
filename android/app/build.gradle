@@ -72,6 +72,43 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+/**
+ * Release signing: YOUR private upload key — never the public React Native
+ * debug key (Google Play rejects debug-signed apps, and anyone holding that
+ * well-known key could sign an "update" of this app).
+ *
+ * Create it once on your computer with `npm run keystore`. That writes
+ * android/app/upload.keystore + android/keystore.properties (both git-ignored).
+ * BACK BOTH UP (password manager / secure drive): every future update must be
+ * signed with the same key.
+ *
+ * CI / another computer can give the same four values as environment
+ * variables or Gradle properties (-P) instead of keystore.properties:
+ *   SW_UPLOAD_STORE_FILE      path to the keystore (relative to android/, or absolute)
+ *   SW_UPLOAD_STORE_PASSWORD
+ *   SW_UPLOAD_KEY_ALIAS
+ *   SW_UPLOAD_KEY_PASSWORD
+ *
+ * Only to update phones that still have the OLD debug-signed app installed
+ * (never upload this to a store): ./gradlew assembleRelease -PdebugSignedRelease=true
+ */
+def uploadProps = new Properties()
+def uploadPropsFile = rootProject.file("keystore.properties")
+if (uploadPropsFile.exists()) {
+    uploadPropsFile.withInputStream { uploadProps.load(it) }
+}
+def uploadValue = { String name ->
+    def v = project.findProperty(name) ?: System.getenv(name) ?: uploadProps.getProperty(name)
+    return v ? v.toString().trim() : null
+}
+def uploadStorePath = uploadValue("SW_UPLOAD_STORE_FILE")
+def uploadStoreFile = uploadStorePath ? rootProject.file(uploadStorePath) : null
+def uploadStorePassword = uploadValue("SW_UPLOAD_STORE_PASSWORD")
+def uploadKeyAlias = uploadValue("SW_UPLOAD_KEY_ALIAS")
+def uploadKeyPassword = uploadValue("SW_UPLOAD_KEY_PASSWORD") ?: uploadStorePassword
+def uploadKeyReady = uploadStoreFile != null && uploadStoreFile.exists() && uploadStorePassword && uploadKeyAlias
+def debugSignedRelease = (project.findProperty("debugSignedRelease") ?: "false").toString() == "true"
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -88,6 +125,17 @@ android {
         versionCode 2
         versionName "2.0"
     }
+    // react-native-pdf (FileViewer) bundles its own libc++_shared.so; keep one copy per ABI
+    packaging {
+        jniLibs {
+            pickFirsts += [
+                'lib/x86/libc++_shared.so',
+                'lib/x86_64/libc++_shared.so',
+                'lib/armeabi-v7a/libc++_shared.so',
+                'lib/arm64-v8a/libc++_shared.so'
+            ]
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -95,20 +143,49 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (uploadKeyReady) {
+            release {
+                storeFile uploadStoreFile
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
+            // debug builds (and debugOptimized, which copies debug) keep the debug key
             signingConfig signingConfigs.debug
         }
         release {
-            // Same key the old app's releases were signed with (app/debug.keystore —
-            // byte-identical to the old project's), so phones accept this as an update.
-            // For the Play Store, switch to your own upload keystore:
-            // https://reactnative.dev/docs/signed-apk-android
-            signingConfig signingConfigs.debug
+            // Your upload key (see above). Releases signed with the public debug key
+            // only on explicit request (-PdebugSignedRelease=true), never by default.
+            if (uploadKeyReady) {
+                signingConfig signingConfigs.release
+            } else if (debugSignedRelease) {
+                signingConfig signingConfigs.debug
+            }
+            // neither: the check below stops the build with instructions
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+// A release build without the upload key stops here with instructions,
+// instead of producing an unsigned (uninstallable) or debug-signed APK/AAB.
+if (!uploadKeyReady && !debugSignedRelease) {
+    def missing = uploadStorePath && !(uploadStoreFile?.exists()) ?
+        "the keystore file ${uploadStoreFile} does not exist" :
+        "no upload key is configured (android/keystore.properties or SW_UPLOAD_* variables)"
+    def help = "Release builds are signed with your own upload key, but ${missing}.\n" +
+        "Create one once with:  npm run keystore   (then back up android/app/upload.keystore\n" +
+        "and android/keystore.properties somewhere safe). See the top of android/app/build.gradle."
+    // preReleaseBuild runs first for every release build; the package/sign tasks are a backstop
+    // in case a future Android Gradle Plugin renames it.
+    def releaseGuards = ["preReleaseBuild", "packageRelease", "packageReleaseBundle", "signReleaseBundle"]
+    tasks.matching { it.name in releaseGuards }.configureEach {
+        doFirst { throw new GradleException(help) }
     }
 }
 
@@ -122,3 +199,6 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Firebase push: turns android/app/google-services.json into resources. Keep last.
+apply plugin: "com.google.gms.google-services"
