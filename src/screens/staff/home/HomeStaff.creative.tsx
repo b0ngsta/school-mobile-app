@@ -6,7 +6,7 @@
 // and red dots mark launchers with something new inside (updates.ts).
 // Data comes from useStaffHome (shared with HomeStaff.default.tsx) — UI only.
 import React, { useMemo } from 'react';
-import { AttendancePanel, GlassError, HeaderSkeleton, HomeGreeting, useNow } from '../../../components/orbit/HomeParts';
+import { AttendancePanel, GlassError, HeaderSkeleton, HomeGreeting, SchoolChip, useNow } from '../../../components/orbit/HomeParts';
 import type { PanelAction } from '../../../components/orbit/HomeParts';
 import { OrbitHome } from '../../../components/orbit/OrbitHome';
 import type { OrbitItem } from '../../../components/orbit/OrbitHome';
@@ -17,6 +17,9 @@ import { ROLE_LABELS } from '../../../theme';
 import type { ScreenProps } from '../../../types';
 import { useStaffHome } from './useStaffHome';
 import type { RouteArg } from './useStaffHome';
+
+/** Room for the school pill above the greeting (same as the student's creative home). */
+const SCHOOL_PILL_H = 34;
 
 export default function HomeStaffCreative({ navigate, session }: ScreenProps) {
   const role = session.user_type;
@@ -60,6 +63,7 @@ export default function HomeStaffCreative({ navigate, session }: ScreenProps) {
   ) : (
     <>
       <GlassError message={error} />
+      <SchoolChip name={session.org_name || t('My school')} onPress={() => navigate('SchoolInfo')} />
       <HomeGreeting name={session.full_name} detail={`${t(ROLE_LABELS[role] || role)}  ·  ${t('EMP ID:')} ${session.user_id}`} />
       <AttendancePanel
         title={t('Today Attendance')}
@@ -83,6 +87,7 @@ export default function HomeStaffCreative({ navigate, session }: ScreenProps) {
       refreshing={refreshing}
       onRefresh={loading ? undefined : refresh}
       onNotifications={() => navigate('Notifications')}
+      headerExtra={SCHOOL_PILL_H}
     />
   );
 }

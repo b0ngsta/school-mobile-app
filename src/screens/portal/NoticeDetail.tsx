@@ -1,7 +1,8 @@
 // One notice: date, posting time, title, the full message and — when the
 // school attached one — the file, previewed in place with a Full screen
-// button (FileViewer). Params: { id, notice? } (the list row shows at once).
-// Data: GET /student/notices/{id}
+// button (FileViewer). Params: { id, notice?, kind? } (the list row shows at once).
+// Data: GET /student/notices/{id}; kind 'class' = a class teacher's
+// announcement, GET /student/class-announcements/{id} (backend 0018).
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Pdf from 'react-native-pdf';
@@ -17,7 +18,10 @@ import type { Notice, ScreenProps } from '../../types';
 
 export default function NoticeDetail({ params, navigate, goBack }: ScreenProps) {
   const { t } = useI18n();
-  const res = useApi<Notice>(params?.id ? `/student/notices/${params.id}` : null);
+  const isClass = params?.kind === 'class';
+  const base = isClass ? '/student/class-announcements' : '/student/notices';
+  const res = useApi<Notice>(params?.id ? `${base}/${params.id}` : null);
+  const heading = isClass ? t('Class Announcements') : t('Notice Board');
   const n: Notice | undefined = res.data || params?.notice;
   const kind = n?.attachment_path ? fileKind(n.attachment_path, n.attachment_type) : null;
   const url = n?.attachment_path ? photoUrl(n.attachment_path) : null;
@@ -27,7 +31,7 @@ export default function NoticeDetail({ params, navigate, goBack }: ScreenProps) 
 
   return (
     <Screen refreshing={res.refreshing} onRefresh={res.refresh} padded={false}>
-      <PortalHeader title={t('Notice Board')} onBack={goBack}>
+      <PortalHeader title={heading} onBack={goBack}>
         {n ? (
           <View>
             <View style={styles.datePill}>
@@ -55,6 +59,9 @@ export default function NoticeDetail({ params, navigate, goBack }: ScreenProps) 
               </View>
               <Text style={styles.message}>{n.body}</Text>
               {n.posted_by ? <Text style={styles.by}>— {n.posted_by}</Text> : null}
+              {n.audience_label && (isClass || n.audience === 'classes') ? (
+                <Text style={styles.by}>{t('For {who}', { who: n.audience_label })}</Text>
+              ) : null}
             </PCard>
             {kind && url ? (
               <PCard style={styles.pad}>

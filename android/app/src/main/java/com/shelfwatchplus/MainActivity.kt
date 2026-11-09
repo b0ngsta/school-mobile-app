@@ -1,5 +1,6 @@
 package com.shelfwatchplus
 
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -12,6 +13,15 @@ class MainActivity : ReactActivity() {
    * rendering of the component.
    */
   override fun getMainComponentName(): String = "ShelfwatchPlus"
+
+  /**
+   * The manifest gives this activity LaunchTheme (Vidya Nova logo on the launch window). Switch to the
+   * normal AppTheme before anything is drawn so the logo never shows behind the app's own screens.
+   */
+  override fun onCreate(savedInstanceState: Bundle?) {
+    setTheme(R.style.AppTheme)
+    super.onCreate(savedInstanceState)
+  }
 
   /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]

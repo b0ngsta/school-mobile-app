@@ -117,13 +117,16 @@ android {
     // namespace = package of the Kotlin sources (MainActivity/MainApplication).
     namespace "com.shelfwatchplus"
     defaultConfig {
-        // Must stay the OLD app's ID so this installs as an update over it.
-        applicationId "com.shelfwatchstudent"
+        // Vidya Nova on Google Play. PERMANENT once the first build is uploaded to Play Console —
+        // Google never lets an app change it. (Was com.shelfwatchstudent, only ever side-loaded.)
+        // Firebase: android/app/google-services.json must contain an Android app with this package name.
+        applicationId "com.vidyanova.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Old app was versionCode 1 — an update must be >= that.
-        versionCode 2
-        versionName "2.0"
+        // Raise versionCode by 1 for EVERY upload to Play (it rejects a code it has seen);
+        // versionName is what users see on the store.
+        versionCode 1
+        versionName "1.0.0"
     }
     // react-native-pdf (FileViewer) bundles its own libc++_shared.so; keep one copy per ABI
     packaging {

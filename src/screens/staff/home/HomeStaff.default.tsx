@@ -22,7 +22,7 @@ import type { RouteArg } from './useStaffHome';
 export default function HomeStaffDefault({ navigate, session }: ScreenProps) {
   const { t } = useI18n();
   const role = session.user_type;
-  const { grid, me, isTopManager, today, notice, feeStats, dashStats, attStats, error, loading, refreshing, refresh, busyAtt, checkInOut } =
+  const { grid, hasFees, hasAttendance, me, isTopManager, today, notice, feeStats, dashStats, attStats, error, loading, refreshing, refresh, busyAtt, checkInOut } =
     useStaffHome(session);
   const { hasNew } = useUpdateDots();
 
@@ -50,13 +50,18 @@ export default function HomeStaffDefault({ navigate, session }: ScreenProps) {
         <View style={[styles.blob, styles.blobA]} />
         <View style={[styles.blob, styles.blobB]} />
         <View style={styles.headerRow}>
-          <View style={styles.crest}>
-            <MCIcon name="school" size={26} color={colors.brand} />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.school} numberOfLines={2}>{(session.org_name || t('My school')).toUpperCase()}</Text>
-            {!!session.org_code && <Text style={[styles.code, { color: colors.onBrandSub }]}>{session.org_code}</Text>}
-          </View>
+          {/* tap the school → School Info (every role, Nov 2026) */}
+          <TouchableOpacity style={styles.schoolTap} activeOpacity={0.75} onPress={() => navigate('SchoolInfo')}
+            accessibilityRole="button" accessibilityLabel={t('School Info')} accessibilityHint={session.org_name || ''}
+            testID="home-school">
+            <View style={styles.crest}>
+              <MCIcon name="school" size={26} color={colors.brand} />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={styles.school} numberOfLines={2}>{(session.org_name || t('My school')).toUpperCase()}</Text>
+              {!!session.org_code && <Text style={[styles.code, { color: colors.onBrandSub }]}>{session.org_code}</Text>}
+            </View>
+          </TouchableOpacity>
           <HomeBell onPress={() => navigate('Notifications')} />
         </View>
       </View>
@@ -124,8 +129,12 @@ export default function HomeStaffDefault({ navigate, session }: ScreenProps) {
             <View style={styles.stats}>
               <Stat icon="account-group" label={t('Students')} value={dashStats?.students} fg="#3B5BDB" bg="#EEF2FF" />
               <Stat icon="account-tie" label={t('Teachers')} value={dashStats?.teachers} fg={colors.brand} bg={colors.brandSoft} />
-              <Stat icon="calendar-check" label={t('Present')} value={attStats ? `${attStats.present}/${attStats.marked}` : null} fg={colors.ok} bg={colors.okSoft} />
-              <Stat icon="clock-alert-outline" label={t('Due Fees')} value={feeStats ? inr(feeStats.pending + feeStats.overdue) : null} fg={colors.danger} bg={colors.dangerSoft} />
+              {hasAttendance && (
+                <Stat icon="calendar-check" label={t('Present')} value={attStats ? `${attStats.present}/${attStats.marked}` : null} fg={colors.ok} bg={colors.okSoft} />
+              )}
+              {hasFees && (
+                <Stat icon="clock-alert-outline" label={t('Due Fees')} value={feeStats ? inr(feeStats.pending + feeStats.overdue) : null} fg={colors.danger} bg={colors.dangerSoft} />
+              )}
             </View>
           )}
         </View>
@@ -178,6 +187,7 @@ const styles = StyleSheet.create({
   blobA: { width: 220, height: 220, top: -110, right: -60 },
   blobB: { width: 140, height: 140, bottom: -60, left: -40 },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
+  schoolTap: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   crest: {
     width: 50,
     height: 50,

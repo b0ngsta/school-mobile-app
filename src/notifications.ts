@@ -117,11 +117,30 @@ const TYPE_ROUTES: Record<string, { staff: RouteName; student: RouteName }> = {
   leave: { staff: 'Leaves', student: 'Notices' },
   substitution_request: { staff: 'Substitutions', student: 'Notices' },
   substitution_update: { staff: 'Substitutions', student: 'Notices' },
-  message: { staff: 'Notifications', student: 'Messages' },
+  remark: { staff: 'Notifications', student: 'Remarks' },
+  class_announcement: { staff: 'StaffClassAnnouncements', student: 'ClassAnnouncements' },
   event: { staff: 'Notifications', student: 'Events' },
   timetable: { staff: 'Notifications', student: 'StudentTimetable' },
   syllabus: { staff: 'Notifications', student: 'Syllabus' },
 };
+
+/**
+ * A message about ONE item opens that item straight away. The server sends
+ * class announcements as { route: 'ClassAnnouncements', params: { id } }; the
+ * list screen used to push the detail itself on mount, so a tap pushed TWO
+ * screens at once (glitchy animation, and Back landed on a list never seen).
+ * Now the detail is the only screen pushed, and Back returns to where the
+ * user tapped (the bell's inbox, or the home for a push).
+ */
+function direct(route: RouteName, params?: RouteParams): { route: RouteName; params?: RouteParams } {
+  if (route === 'ClassAnnouncements' && params?.id != null) {
+    return { route: 'ClassAnnouncementDetail', params: { id: params.id, kind: 'class' } };
+  }
+  if (route === 'Notices' && params?.id != null) {
+    return { route: 'NoticeDetail', params: { id: params.id } };
+  }
+  return { route, params };
+}
 
 /** Where tapping a notification (in the inbox or from a push) should go. */
 export function targetOf(
@@ -130,7 +149,7 @@ export function targetOf(
   known: (route: string) => boolean,
 ): { route: RouteName; params?: RouteParams } | null {
   const route = n.data?.route;
-  if (route && known(route)) return { route: route as RouteName, params: (n.data?.params || undefined) as RouteParams | undefined };
+  if (route && known(route)) return direct(route as RouteName, (n.data?.params || undefined) as RouteParams | undefined);
   const byType = TYPE_ROUTES[n.type];
   return byType ? { route: isStudent ? byType.student : byType.staff } : null;
 }

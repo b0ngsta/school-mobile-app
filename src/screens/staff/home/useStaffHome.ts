@@ -5,7 +5,7 @@
 // check-out, pull-to-refresh and the quiet reloads on app resume / coming
 // back to the home (each also re-checks the red "new" dots, updates.ts).
 // The UI files (HomeStaff.default.tsx, HomeStaff.creative.tsx) only draw it.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText, peek } from '../../../api';
 import { inr } from '../../../components/ui';
 import type { GridItem } from '../../../components/ui';
@@ -22,6 +22,7 @@ import type {
   TransactionStats,
 } from '../../../types';
 import { refreshUpdates } from '../../../updates';
+import { featuresKey, hasFeature, withFeatures } from '../../../features';
 
 /** Only the newest notice is shown on the home screen. */
 export const LATEST_NOTICE = '/notices?limit=1';
@@ -34,6 +35,7 @@ export const GRIDS: Record<'manager' | 'teacher' | 'driver', HomeTile[]> = {
   manager: [
     { icon: 'google-classroom', label: 'Classes', sub: 'All sections', route: 'StaffClasses' },
     { icon: 'account-tie', label: 'Teachers', sub: 'Staff directory', route: 'Teachers' },
+    { icon: 'microsoft-excel', label: 'Import Students', sub: 'Excel upload', route: 'StudentImport' },
     { icon: 'clipboard-check-outline', label: 'Mark Attendance', sub: 'Take the roll', route: 'MarkAttendance' },
     { icon: 'clock-outline', label: 'Time table', sub: 'Teacher schedules', route: 'Teachers', params: { hint: 'timetable' } },
     { icon: 'currency-inr', label: 'Fees', sub: 'Collect & track', route: 'FeesAdmin' },
@@ -51,12 +53,14 @@ export const GRIDS: Record<'manager' | 'teacher' | 'driver', HomeTile[]> = {
     { icon: 'bus-school', label: 'Transport', sub: 'Buses & routes', route: 'Transport' },
     { icon: 'credit-card-outline', label: 'Payments', sub: 'Transactions', route: 'Payments' },
     { icon: 'message-processing-outline', label: 'Bulk SMS', sub: 'Message parents', route: 'BulkSMS' },
-    { icon: 'bullhorn-outline', label: 'Notice Board', sub: 'School updates', route: 'StaffNotices' },
+    { icon: 'bullhorn-outline', label: 'Notice Board', sub: 'School or classes', route: 'StaffNotices' },
+    { icon: 'account-voice', label: 'Class Announcements', sub: 'Teachers to classes', route: 'StaffClassAnnouncements' },
     { icon: 'account-circle-outline', label: 'Profile', sub: 'Your details', route: 'StaffProfile' },
   ],
   teacher: [
     { icon: 'calendar-account-outline', label: 'My Attendance', sub: 'Your record', route: 'StaffAttendance' },
     { icon: 'google-classroom', label: 'My Classes', sub: 'Your sections', route: 'MyClasses' },
+    { icon: 'microsoft-excel', label: 'Import Students', sub: 'Class teacher · Excel', route: 'StudentImport' },
     { icon: 'clipboard-check-outline', label: 'Mark Attendance', sub: 'Take the roll', route: 'MarkAttendance' },
     { icon: 'clock-outline', label: 'Time table', sub: 'Your schedule', route: 'MyTimetable' },
     { icon: 'school', label: 'Marks Entry', sub: 'Results & Excel upload', route: 'StaffExams' },
@@ -67,6 +71,7 @@ export const GRIDS: Record<'manager' | 'teacher' | 'driver', HomeTile[]> = {
     { icon: 'account-switch-outline', label: 'Substitutions', sub: 'Cover classes', route: 'Substitutions' },
     { icon: 'cash-multiple', label: 'Salary', sub: 'Pay slips', route: 'Salary' },
     { icon: 'calendar-star', label: 'Holidays', sub: 'Days off', route: 'Holidays' },
+    { icon: 'account-voice', label: 'Announcements', sub: 'Tell your classes', route: 'StaffClassAnnouncements' },
     { icon: 'bullhorn-outline', label: 'Notice Board', sub: 'School updates', route: 'StaffNotices' },
     { icon: 'account-circle-outline', label: 'Profile', sub: 'Your details', route: 'StaffProfile' },
   ],
@@ -87,6 +92,9 @@ export const gridForRole = (role: string): HomeTile[] =>
 
 export interface StaffHomeData {
   grid: HomeTile[];
+  /** modules HQ may switch off for the school (features.ts) */
+  hasFees: boolean;
+  hasAttendance: boolean;
   me: AuthUser | null;
   isTopManager: boolean;
   today: StaffAttendanceRecord | null;
@@ -108,7 +116,11 @@ export interface StaffHomeData {
 export function useStaffHome(session: Session): StaffHomeData {
   const role = session.user_type;
   const isTopManager = ['admin', 'principal'].includes(role);
-  const grid = gridForRole(role);
+  // launchers of modules switched off for the school are left out (features.ts)
+  const flags = featuresKey(session);
+  const grid = useMemo(() => withFeatures(gridForRole(role), session), [role, flags]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hasFees = hasFeature(session, 'fees');
+  const hasAttendance = hasFeature(session, 'attendance');
   const { t } = useI18n();
 
   const [me, setMe] = useState<AuthUser | null>(() => peek<AuthUser>('/auth/me'));
@@ -136,17 +148,17 @@ export function useStaffHome(session: Session): StaffHomeData {
     ];
     if (isTopManager) {
       requests.push(
-        api<FeeStats>('/fees/stats').then(setFeeStats),
-        api<TransactionStats>('/transactions/stats').then(setPayStats),
+        ...(hasFees ? [api<FeeStats>('/fees/stats').then(setFeeStats)] : []),
+        ...(hasFees ? [api<TransactionStats>('/transactions/stats').then(setPayStats)] : []),
         api<DashboardStats>('/dashboard/stats').then(setDashStats),
-        api<AttendanceStats>('/attendance/stats').then(setAttStats),
+        ...(hasAttendance ? [api<AttendanceStats>('/attendance/stats').then(setAttStats)] : []),
       );
     }
     const results = await Promise.allSettled(requests);
     const failed = results.find((x): x is PromiseRejectedResult => x.status === 'rejected');
     setError(failed ? errorText(failed.reason) : null);
     setRefreshing(false);
-  }, [isTopManager]);
+  }, [isTopManager, hasFees, hasAttendance]);
   useEffect(() => {
     load();
   }, [load]);
@@ -179,7 +191,7 @@ export function useStaffHome(session: Session): StaffHomeData {
 
   const refresh = useCallback(() => load(true), [load]);
   return {
-    grid, me, isTopManager, today, notice, feeStats, payStats, dashStats, attStats, live,
+    grid, hasFees, hasAttendance, me, isTopManager, today, notice, feeStats, payStats, dashStats, attStats, live,
     error, loading, refreshing, refresh, busyAtt, checkInOut,
   };
 }

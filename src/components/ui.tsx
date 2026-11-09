@@ -15,6 +15,7 @@ import {
   Text,
   TextInput,
   TextInputProps,
+  TextStyle,
   TouchableOpacity,
   View,
   ViewStyle,
@@ -318,8 +319,45 @@ export function ListItem({ icon, label, desc, onPress, right, tint }: ListItemPr
 
 type ButtonKind = 'primary' | 'soft' | 'ghost' | 'danger';
 
+/* ------------------------------------------------------------------ */
+/* Button / chip labels. Labels like "📚 Homework" used to be ONE Text: on */
+/* some Android phones (MIUI / HyperOS) the emoji is measured narrower    */
+/* than it draws, so the line broke after it and only the emoji showed.   */
+/* The leading emoji (or `icon`) is now its own element — a vector icon   */
+/* when EMOJI_ICON knows it — and the words a single line of their own.   */
+/* ------------------------------------------------------------------ */
+const EMOJI_CHAR = '(?:[\\u2190-\\u21FF\\u2300-\\u23FF\\u2600-\\u27BF\\u2B00-\\u2BFF]|[\\uD83C-\\uD83E][\\uDC00-\\uDFFF])';
+const LEADING_EMOJI = new RegExp(`^(${EMOJI_CHAR}(?:\\uFE0F|\\u200D${EMOJI_CHAR})*\\uFE0F?)\\s+([\\s\\S]+)$`);
+
+/** "📚 Homework" → { emoji: "📚", text: "Homework" }; labels without a leading emoji are left alone. */
+export function splitLabel(label: string): { emoji: string | null; text: string } {
+  const m = LEADING_EMOJI.exec(label || '');
+  return m ? { emoji: m[1], text: m[2] } : { emoji: null, text: label };
+}
+
+function LabelText({ label, icon, color, style }: { label: string; icon?: string; color: string; style?: StyleProp<TextStyle> }) {
+  const { emoji, text } = splitLabel(label);
+  const lead = icon || emoji;
+  const mci = iconName(lead || undefined);
+  const size = (StyleSheet.flatten(style)?.fontSize as number | undefined) ?? 14;
+  return (
+    <View style={styles.labelRow}>
+      {lead ? (
+        mci ? (
+          <MCIcon name={mci} size={size + 3} color={color} style={styles.labelIcon} />
+        ) : (
+          <Text style={[style, styles.labelIcon, { color }]}>{lead}</Text>
+        )
+      ) : null}
+      <Text style={[style, { color }, styles.labelText]} numberOfLines={1}>{text}</Text>
+    </View>
+  );
+}
+
 interface ButtonProps {
   label: string;
+  /** Optional MaterialCommunityIcons name (or legacy emoji) drawn before the label. */
+  icon?: string;
   onPress?: () => void;
   kind?: ButtonKind;
   busy?: boolean;
@@ -329,7 +367,7 @@ interface ButtonProps {
   testID?: string;
 }
 
-export function Button({ label, onPress, kind = 'primary', busy, disabled, small, style, testID }: ButtonProps) {
+export function Button({ label, icon, onPress, kind = 'primary', busy, disabled, small, style, testID }: ButtonProps) {
   const off = disabled || busy;
   const base: StyleProp<ViewStyle>[] = [styles.btn, small && styles.btnSmall, style];
   if (kind === 'primary') base.push({ backgroundColor: off ? colors.faint : colors.brand });
@@ -343,7 +381,7 @@ export function Button({ label, onPress, kind = 'primary', busy, disabled, small
       {busy ? (
         <ActivityIndicator color={fg} size="small" />
       ) : (
-        <Text style={[styles.btnText, small && { fontSize: 13 }, { color: fg }]}>{label}</Text>
+        <LabelText label={label} icon={icon} color={fg} style={[styles.btnText, small && { fontSize: 13 }]} />
       )}
     </TouchableOpacity>
   );
@@ -422,13 +460,15 @@ export function TextLink({ label, onPress, disabled }: { label: string; onPress?
 
 interface ChipProps {
   label: string;
+  /** Optional MaterialCommunityIcons name drawn before the label. */
+  icon?: string;
   active?: boolean;
   onPress?: () => void;
   tone?: 'danger' | 'ok';
 }
 
 /** Horizontal selectable chip. */
-export function Chip({ label, active, onPress, tone }: ChipProps) {
+export function Chip({ label, icon, active, onPress, tone }: ChipProps) {
   const activeBg = tone === 'danger' ? colors.danger : tone === 'ok' ? colors.ok : colors.brand;
   return (
     <TouchableOpacity
@@ -440,7 +480,7 @@ export function Chip({ label, active, onPress, tone }: ChipProps) {
           ? { backgroundColor: activeBg, borderColor: activeBg, ...shadow.card }
           : { backgroundColor: colors.white, borderColor: colors.line },
       ]}>
-      <Text style={{ fontSize: 13, fontWeight: '600', color: active ? '#fff' : colors.subtle }}>{label}</Text>
+      <LabelText label={label} icon={icon} color={active ? '#fff' : colors.subtle} style={{ fontSize: 13, fontWeight: '600' }} />
     </TouchableOpacity>
   );
 }
@@ -448,6 +488,8 @@ export function Chip({ label, active, onPress, tone }: ChipProps) {
 export interface SegmentItem<V extends string = string> {
   value: V;
   label: string;
+  /** Optional MaterialCommunityIcons name drawn before the label. */
+  icon?: string;
 }
 
 /** Row of chips used as segmented tabs. */
@@ -455,7 +497,7 @@ export function Segments<V extends string>({ items, value, onChange }: { items: 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>
       {items.map(it => (
-        <Chip key={it.value} label={it.label} active={value === it.value} onPress={() => onChange(it.value)} />
+        <Chip key={it.value} label={it.label} icon={it.icon} active={value === it.value} onPress={() => onChange(it.value)} />
       ))}
     </View>
   );
@@ -937,6 +979,9 @@ const styles = StyleSheet.create({
   },
   btnSmall: { paddingVertical: 8, paddingHorizontal: 12, marginTop: 0 },
   btnText: { fontWeight: '700', fontSize: 15 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', maxWidth: '100%' },
+  labelIcon: { marginRight: 6 },
+  labelText: { flexShrink: 1 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: colors.ink, marginBottom: 6 },
   inputHint: { fontSize: 11.5, color: colors.subtle, marginTop: 5, lineHeight: 16 },
   passwordWrap: { flexDirection: 'row', alignItems: 'center', paddingVertical: 0 },

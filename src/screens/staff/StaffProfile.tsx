@@ -6,11 +6,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { photoUrl } from '../../api';
 import { AccountActions } from '../../components/AccountActions';
 import { ThemePicker } from '../../components/ThemePicker';
-import { Avatar, Card, ErrorBox, Screen, SectionTitle } from '../../components/ui';
+import { Card, ErrorBox, Screen, SectionTitle } from '../../components/ui';
 import { useApi, useI18n } from '../../hooks';
 import { LANGS } from '../../i18n';
 import { ROLE_LABELS, colors } from '../../theme';
 import type { AuthUser, ScreenProps } from '../../types';
+import PhotoAvatar from '../../components/PhotoAvatar';
 
 export default function StaffProfile({ session, navigate, onLogout }: ScreenProps) {
   const { t, lang, setLang } = useI18n();
@@ -23,7 +24,7 @@ export default function StaffProfile({ session, navigate, onLogout }: ScreenProp
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <ErrorBox message={error} />
       <Card style={styles.hero}>
-        <Avatar name={fullName} uri={photoUrl(me?.photo_path)} size={60} />
+        <PhotoAvatar name={fullName} uri={photoUrl(me?.photo_path)} size={60} testID="profile-photo" />
         <View style={{ marginLeft: 14, flex: 1 }}>
           <Text style={styles.name}>{fullName}</Text>
           <View style={[styles.rolePill, { backgroundColor: colors.brandSoft }]}>

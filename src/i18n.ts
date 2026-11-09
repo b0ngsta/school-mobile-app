@@ -45,6 +45,11 @@ const en = {
   'status.ongoing': 'ongoing',
   'status.completed': 'completed',
 
+  // splash (components/SplashScreen.tsx)
+  'splash.tagline': 'Your school, in your pocket',
+  'splash.connecting': 'Connecting to your school…',
+  'splash.waking': 'Waking up the server — almost there…',
+
   // login
   'login.subtitle': 'Sign in — students, teachers, admins & staff',
   'login.username': 'Username',
@@ -203,6 +208,10 @@ const hi = {
   'status.upcoming': 'आगामी',
   'status.ongoing': 'चालू',
   'status.completed': 'संपन्न',
+
+  'splash.tagline': 'आपका स्कूल, आपकी जेब में',
+  'splash.connecting': 'आपके स्कूल से जुड़ रहे हैं…',
+  'splash.waking': 'सर्वर चालू हो रहा है — बस थोड़ा और…',
 
   'login.subtitle': 'साइन इन करें — छात्र, शिक्षक, एडमिन और स्टाफ़',
   'login.username': 'उपयोगकर्ता नाम',
@@ -1078,6 +1087,56 @@ const hi = {
   "Results — tap a section": "परिणाम — सेक्शन चुनें",
   "Template": "टेम्पलेट",
   "Saved ✓ {marks} marks for {students} students": "सहेजा गया ✓ {students} छात्रों के {marks} अंक",
+  // class notices + class announcements (Nov 2026, backend 0018)
+  'Class Announcements': 'कक्षा घोषणाएँ',
+  'Announcements': 'घोषणाएँ',
+  'From your teachers': 'आपके शिक्षकों से',
+  'Tell your classes': 'अपनी कक्षाओं को बताएँ',
+  'Teachers to classes': 'शिक्षकों से कक्षाओं को',
+  'School or classes': 'स्कूल या कक्षाएँ',
+  'No announcements from your teachers yet.': 'अभी शिक्षकों की कोई घोषणा नहीं है।',
+  '{n} announcement': '{n} घोषणा',
+  '{n} announcements': '{n} घोषणाएँ',
+  'For {who}': '{who} के लिए',
+  'Whole school': 'पूरा स्कूल',
+  'Selected classes': 'चुनी हुई कक्षाएँ',
+  'Send to': 'किसे भेजें',
+  'some classes': 'कुछ कक्षाएँ',
+  'Choose at least one class': 'कम से कम एक कक्षा चुनें',
+  "Only these classes' parents and teachers see it and get a notification.":
+    'केवल इन कक्षाओं के अभिभावक और शिक्षक इसे देखेंगे और सूचना पाएँगे।',
+  'Attach PDF or photo (optional)': 'PDF या फ़ोटो जोड़ें (वैकल्पिक)',
+  'The notice was published, but the file could not be attached: {why}':
+    'सूचना प्रकाशित हो गई, पर फ़ाइल नहीं जुड़ी: {why}',
+  'Announce to your classes': 'अपनी कक्षाओं में घोषणा करें',
+  'Parents of the classes you choose see it in the app and get a notification. Add a PDF or photo if needed.':
+    'आपकी चुनी कक्षाओं के अभिभावक इसे ऐप में देखेंगे और सूचना पाएँगे। ज़रूरत हो तो PDF या फ़ोटो जोड़ें।',
+  'No announcements yet. Tap + to post one.': 'अभी कोई घोषणा नहीं। पोस्ट करने के लिए + दबाएँ।',
+  'New announcement': 'नई घोषणा',
+  'Edit announcement': 'घोषणा बदलें',
+  'Post announcement': 'घोषणा पोस्ट करें',
+  'Delete this announcement?': 'यह घोषणा हटाएँ?',
+  'Heading': 'शीर्षक',
+  'Heading and message are required': 'शीर्षक और संदेश ज़रूरी हैं',
+  'Remove the attached file': 'जुड़ी फ़ाइल हटाएँ',
+  'Saved, but the file could not be attached: {why}': 'सहेजा गया, पर फ़ाइल नहीं जुड़ी: {why}',
+  // teacher remarks + attendance (Nov 2026)
+  'Teacher Remarks': 'शिक्षकों की टिप्पणियाँ',
+  'All teachers': 'सभी शिक्षक',
+  'No remarks from teachers yet.': 'अभी शिक्षकों की कोई टिप्पणी नहीं।',
+  '{n} remark': '{n} टिप्पणी',
+  '{n} remarks': '{n} टिप्पणियाँ',
+  'What teachers say': 'शिक्षक क्या कहते हैं',
+  'Mark attendance': 'उपस्थिति लगाएँ',
+  'Already marked today — changes update it': 'आज लग चुकी है — बदलाव अपडेट होंगे',
+  '{n} students · not marked yet': '{n} छात्र · अभी नहीं लगी',
+  'All present': 'सभी उपस्थित',
+  'All absent': 'सभी अनुपस्थित',
+  'Search name or roll no.': 'नाम या रोल नंबर खोजें',
+  'Tap a class above to take the roll.': 'उपस्थिति लेने के लिए ऊपर कक्षा चुनें',
+  'present': 'उपस्थित',
+  'Half day': 'आधा दिन',
+  'No student matches your search.': 'कोई छात्र नहीं मिला।',
 };
 
 type Dict = Record<string, string | string[]>;

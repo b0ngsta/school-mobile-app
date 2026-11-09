@@ -29,6 +29,8 @@ export interface Session {
   /** The school (organisation) the account belongs to, e.g. "XYZPS" / "XYZ Public School". */
   org_code?: string;
   org_name?: string;
+  /** Per-school feature flags set by EduManage HQ (features.ts); missing = older server = all on. */
+  features?: Record<string, boolean>;
 }
 
 /** Body of POST /auth/login, /auth/refresh, /auth/reset-password, /auth/change-password. */
@@ -48,6 +50,8 @@ export interface AuthResponse {
   org_id?: number;
   org_code?: string;
   org_name?: string;
+  /** Per-school feature flags (backend migration 0019); older servers leave it out. */
+  features?: Record<string, boolean> | null;
 }
 
 /** GET /organisations/{code}: what the login screen shows for a school code. */
@@ -106,6 +110,30 @@ export interface Notice extends AttachmentFields {
   body: string;
   posted_by: string;
   created_at: string;
+  /** 'school' = everyone, 'classes' = only `class_ids` (backend 0018; missing on older servers). */
+  audience?: 'school' | 'classes';
+  /** "Class 1, Class 2" / "Whole school"; class announcements: "Class 1 — A, B". */
+  audience_label?: string | null;
+  class_ids?: number[];
+}
+
+/** A teacher's announcement to sections they teach (backend 0018, /class-announcements). */
+export interface ClassAnnouncement extends Notice {
+  created_by?: number | null;
+  recipients_count?: number;
+  section_ids?: number[];
+  posted_by_photo?: string | null;
+}
+
+/** A section the caller may post a class announcement to (GET /class-announcements/targets). */
+export interface AnnouncementTarget {
+  class_id: number;
+  class_name: string;
+  section_id: number;
+  section_name: string;
+  subjects: string | null;
+  class_teacher: boolean;
+  label: string;
 }
 
 /** The school shown in the student home header (part of /student/dashboard). */
@@ -220,20 +248,6 @@ export interface SchoolDocument extends AttachmentFields {
 export interface SyllabusSubject {
   subject: string;
   documents: SchoolDocument[];
-}
-
-/** A message from the school to this parent. */
-export interface StudentMessage extends AttachmentFields {
-  id: number;
-  title: string;
-  body: string;
-  audience: 'students' | 'section' | 'class' | 'school';
-  audience_label: string;
-  created_at: string;
-  read_at: string | null;
-  sender_name?: string | null;
-  sender_role?: Role | null;
-  photo_path?: string | null;
 }
 
 export interface EventMedia {
@@ -414,8 +428,12 @@ export interface ReportCard {
 export interface Remark {
   id: number;
   remark: string;
-  /** /student/remarks */
+  /** /student/remarks: who wrote it and how they teach the child's section */
   by_name?: string;
+  by_designation?: string | null;
+  by_class_teacher?: boolean;
+  by_subjects?: string[];
+  photo_path?: string | null;
   /** /students/{id}/remarks (staff): who wrote it — they (or managers) may edit / delete it. */
   created_by?: number | null;
   created_by_name?: string | null;
@@ -526,6 +544,7 @@ export interface StaffUser {
   qualification?: string | null;
   joining_date?: string | null;
   address?: string | null;
+  designation?: string | null;
   lesson_plan_count?: number;
 }
 

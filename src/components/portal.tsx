@@ -1,5 +1,5 @@
 // Building blocks of the student-portal screens (Attendance, Homework,
-// Time Table, Notice Board, Events, Messages, Transport, Holidays, Subject
+// Time Table, Notice Board, Events, Teacher Remarks, Transport, Holidays, Subject
 // Teachers, Syllabus, School Info, FileViewer): the rounded brand header the
 // screens draw themselves (routes with `ownHeader`), a month switcher, the
 // date box, the attachment row, the attendance ring and the bar chart.

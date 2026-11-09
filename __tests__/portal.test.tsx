@@ -46,8 +46,7 @@ import AttendanceMonth from '../src/screens/portal/AttendanceMonth';
 import Events from '../src/screens/portal/Events';
 import HomeworkSubjects from '../src/screens/portal/HomeworkSubjects';
 import HomeworkSubject from '../src/screens/portal/HomeworkSubject';
-import MessageDetail from '../src/screens/portal/MessageDetail';
-import Messages from '../src/screens/portal/Messages';
+import Remarks from '../src/screens/Remarks';
 import MyTransport from '../src/screens/portal/MyTransport';
 import NoticeDetail from '../src/screens/portal/NoticeDetail';
 import SchoolInfo from '../src/screens/portal/SchoolInfo';
@@ -74,8 +73,6 @@ const texts = (tree: Tree) =>
     const c = n.props.children;
     return Array.isArray(c) ? c.join('') : String(c ?? '');
   }).join(' | ');
-const host = (tree: Tree, match: (props: any) => boolean) =>
-  tree.root.findAll(n => typeof n.type === 'string' && match(n.props));
 const pressable = (tree: Tree, label: string) =>
   tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 
@@ -98,7 +95,7 @@ beforeEach(() => {
 
 test('every portal screen draws its own header (no app top bar)', () => {
   for (const name of ['Attendance', 'AttendanceMonth', 'Homework', 'HomeworkSubjects', 'HomeworkSubject', 'StudentTimetable',
-    'Notices', 'NoticeDetail', 'Events', 'Messages', 'MessageDetail', 'MyTransport', 'Holidays', 'SubjectTeachers',
+    'Notices', 'NoticeDetail', 'Events', 'Remarks', 'MyTransport', 'Holidays', 'SubjectTeachers',
     'Syllabus', 'SyllabusSubject', 'SchoolInfo', 'FileViewer'] as const) {
     expect((SCREENS[name] as ScreenEntry).ownHeader).toBe(true);
   }
@@ -283,24 +280,27 @@ test('events: upcoming / completed tabs with photos and videos', async () => {
   expect(tree.root.findAllByType(Image).length).toBe(1);
 });
 
-test('messages: unread dot, notification opens the message, detail marks it read', async () => {
-  const m = { id: 7, title: 'Time table', body: 'Half yearly Exam. Start date 21-10-2026', audience: 'students',
-    audience_label: 'Dimpal', created_at: '2026-10-06T15:05:00', read_at: null, sender_name: 'Teacher 1', sender_role: 'teacher',
-    attachment_path: PDF, attachment_type: 'pdf', attachment_name: 'tt.pdf' };
-  fixtures['/student/messages'] = [m];
-  const p = props({ id: 7 });
-  const tree = await render(<Messages {...p} />);
-  const all = texts(tree);
-  expect(all).toContain('1 message');
-  expect(all).toContain('To: DIMPAL');
-  expect(host(tree, q => q.accessibilityLabel === 'Unread').length).toBe(1);
-  expect(p.navigate).toHaveBeenCalledWith('MessageDetail', { id: 7 });
-
-  fixtures['/student/messages/7'] = { ...m, read_at: '2026-10-07T09:00:00' };
-  const detail = await render(<MessageDetail {...props({ id: 7 })} />);
-  expect(calls.some(c => c.path === '/student/messages/7')).toBe(true);
-  expect(texts(detail)).toContain('Sent to');
-  expect(texts(detail)).toContain('From: Teacher 1 · Teacher');
+test('teacher remarks: who wrote it (class teacher / subject), filter by teacher', async () => {
+  fixtures['/student/remarks'] = [
+    { id: 2, remark: 'Practise tables daily', created_at: '2026-10-30T10:00:00', by_name: 'Meena Rao',
+      by_subjects: ['Maths'], by_class_teacher: false, by_designation: 'TGT', photo_path: null },
+    { id: 1, remark: 'Very polite and helpful', created_at: '2026-10-20T10:00:00', by_name: 'Asha Verma',
+      by_subjects: [], by_class_teacher: true, by_designation: 'PRT', photo_path: null },
+  ];
+  const tree = await render(<Remarks {...props()} />);
+  expect(calls[0].path).toBe('/student/remarks');
+  let all = texts(tree);
+  expect(all).toContain('Teacher Remarks');
+  expect(all).toContain('2 remarks');
+  expect(all).toContain('Maths');
+  expect(all).toContain('Class teacher');
+  expect(all).toContain('Very polite and helpful');
+  const chip = tree.root.findAll(n => typeof n.props.onPress === 'function' && n.props.accessibilityRole === 'button' &&
+    n.findAll(c => c.type === Text && c.props.children === 'Meena Rao').length > 0)[0];
+  await ReactTestRenderer.act(async () => chip.props.onPress());
+  all = texts(tree);
+  expect(all).toContain('Practise tables daily');
+  expect(all).not.toContain('Very polite and helpful');
 });
 
 test('transport: vehicle, driver, stop and times; none → hint', async () => {

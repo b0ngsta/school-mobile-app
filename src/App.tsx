@@ -8,6 +8,8 @@
 // The UI theme (Profile → Theme: default / creative, uiTheme.ts) is loaded at
 // boot; student screens pick their file through screens/themed.tsx, and the
 // status / nav bar strips follow whichever home is showing.
+// Cold start: the Vidya Nova splash (components/SplashScreen.tsx) covers the app while the saved
+// session loads and the API wakes up (warmup.ts); the app renders underneath and is revealed.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -22,11 +24,12 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { getSession, loadSession, onSessionChange } from './api';
+import { featureOfRoute, hasFeature } from './features';
 import { startAppStateWatch } from './appEvents';
 import { ScreenStack } from './components/ScreenStack';
 import LaunchPopup from './components/LaunchPopup';
 import { HOME } from './components/orbit/palette';
-import { Loading } from './components/ui';
+import SplashScreen from './components/SplashScreen';
 // import { SCHOOL_NAME, sessionLabel } from './config';
 import { useI18n, useUiTheme } from './hooks';
 import { loadLang, t } from './i18n';
@@ -41,6 +44,7 @@ import { colors } from './theme';
 import type { NavigateFn, RouteParams, Session } from './types';
 import { homeIsOrbit, loadUiTheme, resetUiTheme } from './uiTheme';
 import { markSeen, startUpdates } from './updates';
+import { warmUpServer } from './warmup';
 
 interface StackEntry {
   /** Unique per push, so a screen keeps its identity while it animates. */
@@ -50,6 +54,8 @@ interface StackEntry {
 }
 
 const HOME_KEY = 'home';
+/** Longest the splash waits for a sleeping server before opening the app anyway (screens show their own loading). */
+const SPLASH_MAX_WAIT_MS = 12_000;
 let lastEntryId = 0;
 
 const entryKey = (entry: StackEntry) => entry.key;
@@ -69,6 +75,8 @@ export default function App() {
 function AppShell() {
   const insets = useSafeAreaInsets();
   const [booted, setBooted] = useState(false);
+  const [serverChecked, setServerChecked] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [stack, setStack] = useState<StackEntry[]>([]); // pushed on top of home
   const [authScreen, setAuthScreen] = useState<'login' | 'forgot'>('login');
@@ -91,6 +99,13 @@ function AppShell() {
         setStack([]); // a different user (or none) never inherits screens
         setAuthScreen('login');
       }
+      // a module HQ just switched off (features.ts): close its open screens too
+      if (s?.features) {
+        setStack(st => {
+          const kept = st.filter(e => hasFeature(s, featureOfRoute(e.route)));
+          return kept.length === st.length ? st : kept;
+        });
+      }
       if (!s) {
         setLoginNotice(reason === 'expired' ? t('err.sessionExpired') : null);
         // The theme choice lasts one sign-in: the next login starts on the default theme.
@@ -98,6 +113,8 @@ function AppShell() {
       }
       setSession(s);
     });
+    // Wake the API now, in parallel with loading the saved session.
+    warmUpServer(SPLASH_MAX_WAIT_MS).then(() => setServerChecked(true));
     Promise.all([loadSession(), loadLang(), loadUiTheme()]).then(() => {
       const s = getSession();
       userKey.current = s ? `${s.user_type}:${s.user_id}` : null;
@@ -113,6 +130,8 @@ function AppShell() {
   const navigate = useCallback<NavigateFn>((route, params) => {
     // Notifications/pushes can name a route this build doesn't have — ignore those.
     if (!(route in SCREENS)) return;
+    // …or a module HQ switched off for this school (features.ts): old pushes, stale links.
+    if (!hasFeature(getSession(), featureOfRoute(route))) return;
     const key = `${route}-${++lastEntryId}`;
     markSeen(route); // opening a screen clears its red "new" dot on the home (updates.ts)
     setStack(s => [...s, { key, route, params }]);
@@ -177,11 +196,21 @@ function AppShell() {
   const topScreen: ScreenEntry | undefined = atHomeRoot ? undefined : SCREENS[stack[stack.length - 1].route];
   const topStrip = atOrbitHome ? HOME.skyTop : atHomeRoot || topScreen?.ownHeader ? colors.brand : colors.brandDark;
 
-  if (!booted) return <Loading />;
+  const hideSplash = useCallback(() => setSplashGone(true), []);
+  const splash = splashGone ? null : <SplashScreen ready={booted && serverChecked} onHidden={hideSplash} />;
+  // The app draws under the splash; its status bar style applies once the splash is gone.
+  const withSplash = (content: React.ReactNode) => (
+    <View style={styles.safe}>
+      {content}
+      {splash}
+    </View>
+  );
+
+  if (!booted) return withSplash(null);
   if (!session || session.must_change_password) {
-    return (
+    return withSplash(
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.page }]}>
-        <StatusBar barStyle="dark-content" />
+        {splashGone ? <StatusBar barStyle="dark-content" /> : null}
         {session ? (
           <ForcedPasswordChange />
         ) : authScreen === 'forgot' ? (
@@ -189,16 +218,16 @@ function AppShell() {
         ) : (
           <Login notice={loginNotice} onForgotPassword={() => setAuthScreen('forgot')} />
         )}
-      </SafeAreaView>
+      </SafeAreaView>,
     );
   }
 
-  return (
+  return withSplash(
     // Bottom inset is painted separately (page color) so the brand color only
     // shows behind the status bar, like the old opaque status bar did.
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safe, { backgroundColor: topStrip }]}>
       {/* StatusBar.backgroundColor is gone with edge-to-edge; the SafeAreaView behind it provides the color. */}
-      <StatusBar barStyle="light-content" />
+      {splashGone ? <StatusBar barStyle="light-content" /> : null}
       <ScreenStack
         entries={entries}
         keyOf={entryKey}
@@ -212,8 +241,8 @@ function AppShell() {
       />
       <View style={{ height: insets.bottom, backgroundColor: atOrbitHome ? HOME.ground : colors.page }} />
       {/* school announcements, once per app start (parents only) */}
-      {isStudent && signedInKey ? <LaunchPopup userKey={signedInKey} /> : null}
-    </SafeAreaView>
+      {isStudent && signedInKey && splashGone ? <LaunchPopup userKey={signedInKey} /> : null}
+    </SafeAreaView>,
   );
 }
 
@@ -236,7 +265,7 @@ function Page({ entry, session, navigate, goBack, onLogout }: PageProps) {
   // Hook (not a prop) so a theme switch repaints this page past StackPage's memo.
   const orbit = homeIsOrbit(session.user_type, useUiTheme());
   const title =
-    entry.params?.title || (screen.titleKey ? t(screen.titleKey) : screen.title ? t(screen.title) : 'EduManage');
+    entry.params?.title || (screen.titleKey ? t(screen.titleKey) : screen.title ? t(screen.title) : 'Vidya Nova');
   return (
     <>
       {/* top bar — back + title on pushed screens; home and `ownHeader` screens draw their own */}

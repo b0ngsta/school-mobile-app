@@ -10,8 +10,8 @@ import Homework from './screens/Homework';
 import Notices from './screens/Notices';
 import Notifications from './screens/Notifications';
 import Profile from './screens/Profile';
-// HIDDEN (Remarks switched off for students, Oct 2026) — uncomment to re-enable:
-// import Remarks from './screens/Remarks';
+// Teacher Remarks (back Nov 2026: any teacher of the class writes them)
+import Remarks from './screens/Remarks';
 // ReportCards route = the Performance Report (Nov 2026); the old list (screens/ReportCards.tsx) is kept for reference
 import PerformanceReport from './screens/portal/PerformanceReport';
 import StudentTimetable from './screens/StudentTimetable';
@@ -24,8 +24,7 @@ import Events from './screens/portal/Events';
 import FullSyllabus from './screens/portal/FullSyllabus';
 import HomeworkSubject from './screens/portal/HomeworkSubject';
 import HomeworkSubjects from './screens/portal/HomeworkSubjects';
-import MessageDetail from './screens/portal/MessageDetail';
-import Messages from './screens/portal/Messages';
+import ClassAnnouncements from './screens/portal/ClassAnnouncements';
 import MyTransport from './screens/portal/MyTransport';
 import NoticeDetail from './screens/portal/NoticeDetail';
 import SchoolInfo from './screens/portal/SchoolInfo';
@@ -57,6 +56,7 @@ import StaffClasses from './screens/staff/StaffClasses';
 import StaffExamDetail from './screens/staff/StaffExamDetail';
 import StaffExams from './screens/staff/StaffExams';
 import StaffNotices from './screens/staff/StaffNotices';
+import StaffClassAnnouncements from './screens/staff/StaffClassAnnouncements';
 import StaffProfile from './screens/staff/StaffProfile';
 import StaffSyllabus from './screens/staff/StaffSyllabus';
 import StudentDetail from './screens/staff/StudentDetail';
@@ -65,6 +65,7 @@ import Teachers from './screens/staff/Teachers';
 import TeacherProfile from './screens/staff/TeacherProfile';
 import Transport from './screens/staff/Transport';
 import Users from './screens/staff/Users';
+import StudentImport from './screens/staff/StudentImport';
 // driver
 import MyRoutine from './screens/driver/MyRoutine';
 
@@ -94,7 +95,7 @@ const Student = {
   Exams: themedScreen({ default: Exams }, 'Exams'),
   ReportCards: themedScreen({ default: PerformanceReport }, 'ReportCards'),
   Fees: themedScreen({ default: Fees }, 'Fees'),
-  // HIDDEN: Remarks: themedScreen({ default: Remarks }, 'Remarks'),
+  Remarks: themedScreen({ default: Remarks }, 'Remarks'),
   Notices: themedScreen({ default: Notices }, 'Notices'),
   Profile: themedScreen({ default: Profile }, 'Profile'),
   StudentTimetable: themedScreen({ default: TimetableFiles }, 'StudentTimetable'),
@@ -105,9 +106,9 @@ const Student = {
   HomeworkSubjects: themedScreen({ default: HomeworkSubjects }, 'HomeworkSubjects'),
   HomeworkSubject: themedScreen({ default: HomeworkSubject }, 'HomeworkSubject'),
   NoticeDetail: themedScreen({ default: NoticeDetail }, 'NoticeDetail'),
+  ClassAnnouncements: themedScreen({ default: ClassAnnouncements }, 'ClassAnnouncements'),
+  ClassAnnouncementDetail: themedScreen({ default: NoticeDetail }, 'ClassAnnouncementDetail'),
   Events: themedScreen({ default: Events }, 'Events'),
-  Messages: themedScreen({ default: Messages }, 'Messages'),
-  MessageDetail: themedScreen({ default: MessageDetail }, 'MessageDetail'),
   MyTransport: themedScreen({ default: MyTransport }, 'MyTransport'),
   SubjectTeachers: themedScreen({ default: SubjectTeachers }, 'SubjectTeachers'),
   Syllabus: themedScreen({ default: Syllabus }, 'Syllabus'),
@@ -131,15 +132,15 @@ export const SCREENS = {
   Exams: { component: Student.Exams, titleKey: 'title.Exams' },
   ReportCards: { component: Student.ReportCards, titleKey: 'title.ReportCards', ownHeader: true },
   Fees: { component: Student.Fees, titleKey: 'title.Fees' },
-  // HIDDEN: Remarks: { component: Student.Remarks, titleKey: 'title.Remarks' },
+  Remarks: { component: Student.Remarks, title: 'Teacher Remarks', ownHeader: true },
   Notices: { component: Student.Notices, titleKey: 'title.Notices', ownHeader: true },
   NoticeDetail: { component: Student.NoticeDetail, title: 'Notice Board', ownHeader: true },
+  ClassAnnouncements: { component: Student.ClassAnnouncements, title: 'Class Announcements', ownHeader: true },
+  ClassAnnouncementDetail: { component: Student.ClassAnnouncementDetail, title: 'Class Announcements', ownHeader: true },
   Profile: { component: Student.Profile, titleKey: 'title.Profile', transition: 'fadeScale' },
   StudentTimetable: { component: Student.StudentTimetable, title: 'Time Table', ownHeader: true },
   WeeklyTimetable: { component: Student.WeeklyTimetable, title: 'Class timetable' },
   Events: { component: Student.Events, title: 'Events', ownHeader: true },
-  Messages: { component: Student.Messages, title: 'Messages', ownHeader: true },
-  MessageDetail: { component: Student.MessageDetail, title: 'Message Details', ownHeader: true },
   MyTransport: { component: Student.MyTransport, title: 'Transport', ownHeader: true },
   SubjectTeachers: { component: Student.SubjectTeachers, title: 'Subject Teachers', ownHeader: true },
   Syllabus: { component: Student.Syllabus, title: 'Syllabus', ownHeader: true },
@@ -170,9 +171,11 @@ export const SCREENS = {
   Transport: { component: Transport, title: 'Transport' },
   Payments: { component: Payments, title: 'Payments' },
   Users: { component: Users, title: 'Staff users' },
+  StudentImport: { component: StudentImport, title: 'Import students from Excel' },
   Reception: { component: Reception, title: 'Reception' },
   BulkSMS: { component: BulkSMS, title: 'Bulk SMS' },
   StaffNotices: { component: StaffNotices, titleKey: 'title.Notices' },
+  StaffClassAnnouncements: { component: StaffClassAnnouncements, title: 'Class Announcements' },
   StaffProfile: { component: StaffProfile, titleKey: 'title.Profile', transition: 'fadeScale' },
   Teachers: { component: Teachers, title: 'Teachers' },
   TeacherProfile: { component: TeacherProfile, title: 'Teacher' },

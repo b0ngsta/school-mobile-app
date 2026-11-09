@@ -17,11 +17,15 @@ import { useI18n, useUpdateDots } from '../../hooks';
 import { colors, shadow } from '../../theme';
 import type { ScreenProps } from '../../types';
 import { studentMenu, useStudentHome } from './useStudentHome';
+import { hasFeature } from '../../features';
 import type { RouteArg } from './useStudentHome';
 
 export default function HomeStudentDefault({ navigate, session }: ScreenProps) {
   const { t } = useI18n();
-  const { dash, fees, error, loading, refreshing, refresh } = useStudentHome();
+  const { dash, fees, error, loading, refreshing, refresh } = useStudentHome(session);
+  // modules HQ may switch off for the school (features.ts): no fees card / attendance chip then
+  const hasFees = hasFeature(session, 'fees');
+  const hasAttendance = hasFeature(session, 'attendance');
   const { hasNew } = useUpdateDots();
 
   const p = dash?.profile;
@@ -103,7 +107,7 @@ export default function HomeStudentDefault({ navigate, session }: ScreenProps) {
                       <Text style={[styles.chipText, { color: colors.brand }]}>{t('dash.roll', { n: p.roll_no })}</Text>
                     </View>
                   )}
-                  {percent != null && (
+                  {hasAttendance && percent != null && (
                     <View style={[styles.chip, { backgroundColor: colors.okSoft }]}>
                       <MCIcon name="calendar-check" size={13} color={colors.ok} />
                       <Text style={[styles.chipText, { color: colors.ok }]}>{t('{n}% present', { n: percent })}</Text>
@@ -115,9 +119,9 @@ export default function HomeStudentDefault({ navigate, session }: ScreenProps) {
             </TouchableOpacity>
           )}
 
-          <View style={styles.divider} />
+          {hasFees && <View style={styles.divider} />}
 
-          <TouchableOpacity activeOpacity={0.8} onPress={() => navigate('Fees')} accessibilityRole="button">
+          {hasFees && <TouchableOpacity activeOpacity={0.8} onPress={() => navigate('Fees')} accessibilityRole="button">
             <View style={styles.feesHead}>
               <MCIcon name="wallet-outline" size={19} color={colors.brand} />
               <Text style={styles.feesTitle}>{t('Fees Summary')}</Text>
@@ -135,7 +139,7 @@ export default function HomeStudentDefault({ navigate, session }: ScreenProps) {
               <FeeTile icon="check-circle" label={t('Fees Paid')} value={fees ? inr(paid) : '—'} fg={colors.ok} bg={colors.okSoft} />
               <FeeTile icon="clock-alert-outline" label={t('Due Fees')} value={fees ? inr(due) : '—'} fg={colors.danger} bg={colors.dangerSoft} />
             </View>
-          </TouchableOpacity>
+          </TouchableOpacity>}
         </View>
 
         <ErrorBox message={error} />
@@ -158,7 +162,7 @@ export default function HomeStudentDefault({ navigate, session }: ScreenProps) {
 
         {/* ---- every screen (no section heading) ---- */}
         <View style={tileGridStyle}>
-          {studentMenu(dash).map(item => (
+          {studentMenu(dash, session).map(item => (
             <ActionTile
               key={`${item.route}:${item.label}`}
               route={item.route}

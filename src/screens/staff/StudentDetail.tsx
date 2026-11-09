@@ -24,6 +24,7 @@ import { MANAGER_ROLES } from '../../roles';
 import { colors } from '../../theme';
 import type { AttendanceResponse, HomeworkItem, Remark, ScreenProps, StudentListItem } from '../../types';
 import { t } from '../../i18n';
+import { hasFeature } from '../../features';
 
 export default function StudentDetail({ params, navigate, session }: ScreenProps) {
   const { studentId } = params || {};
@@ -46,7 +47,7 @@ export default function StudentDetail({ params, navigate, session }: ScreenProps
     r && setRefreshing(true);
     try {
       setStudent(await api(`/students/${studentId}`));
-      api(`/students/${studentId}/attendance`).then(setAttendance).catch(() => {});
+      if (hasFeature(session, 'attendance')) api(`/students/${studentId}/attendance`).then(setAttendance).catch(() => {});
       api(`/students/${studentId}/homework`).then(setHomework).catch(() => {});
       api(`/students/${studentId}/remarks`).then(setRemarks).catch(() => {});
       setError(null);
@@ -55,7 +56,7 @@ export default function StudentDetail({ params, navigate, session }: ScreenProps
     } finally {
       setRefreshing(false);
     }
-  }, [studentId]);
+  }, [studentId, session]);
   useEffect(() => {
     load();
   }, [load]);
@@ -142,8 +143,8 @@ export default function StudentDetail({ params, navigate, session }: ScreenProps
 
       <Segments
         items={[
-          { value: 'homework', label: `📚 ${t('Homework')}` },
-          { value: 'remarks', label: `📝 ${t('Remarks')}` },
+          { value: 'homework', label: t('Homework'), icon: 'book-open-variant' },
+          { value: 'remarks', label: t('Remarks'), icon: 'note-edit-outline' },
         ]}
         value={tab}
         onChange={setTab}

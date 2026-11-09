@@ -2,7 +2,7 @@
 // forced password change: logo, title, subtitle and one card. Restyle the
 // whole pre-login experience here.
 import React, { ReactNode } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { t } from '../i18n';
 import { colors, radius, shadow } from '../theme';
@@ -39,9 +39,8 @@ export function AuthLayout({ title, subtitle, top, onBack, children, footer }: A
         </TouchableOpacity>
       ) : null}
       {top}
-      <View style={[styles.logo, { backgroundColor: colors.brand }, shadow.card]}>
-        <MCIcon name="school-outline" size={30} color="#fff" />
-      </View>
+      {/* Vidya Nova logo (src/assets/brand, made from the brand artwork) */}
+      <Image source={require('../assets/brand/logo.png')} style={styles.logo} accessibilityIgnoresInvertColors />
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       <View style={[styles.card, shadow.card]}>{children}</View>
@@ -54,14 +53,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   back: { position: 'absolute', top: 16, left: 16, zIndex: 1 },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
+  logo: { width: 92, height: 76, marginBottom: 14 },
   title: { fontSize: 24, fontWeight: '800', color: colors.ink, textAlign: 'center' },
   subtitle: { fontSize: 13, color: colors.subtle, marginTop: 4, marginBottom: 26, textAlign: 'center', maxWidth: 380 },
   card: {

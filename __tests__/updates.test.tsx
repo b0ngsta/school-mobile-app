@@ -63,12 +63,12 @@ afterEach(() => {
 
 test('new content lights the section; opening it clears the dot and remembers that', async () => {
   const now = Date.now();
-  serve({ homework: now - 60_000, notices: now - 30 * DAY, events: null, messages: now - 2 * DAY });
+  serve({ homework: now - 60_000, notices: now - 30 * DAY, events: null, remarks: now - 2 * DAY });
   stop = startUpdates('DEFAULT:student:7');
   await refreshUpdates();
 
   expect(hasNew('Homework')).toBe(true); // a minute ago, never opened
-  expect(hasNew('Messages')).toBe(true); // inside the first-run window
+  expect(hasNew('Remarks')).toBe(true); // inside the first-run window
   expect(hasNew('Notices')).toBe(false); // older than NEW_WINDOW_DAYS on a first run
   expect(NEW_WINDOW_DAYS).toBe(7);
   expect(hasNew('Events')).toBe(false); // empty
@@ -85,10 +85,10 @@ test('new content lights the section; opening it clears the dot and remembers th
   stop = startUpdates('DEFAULT:student:7');
   await refreshUpdates();
   expect(hasNew('Homework')).toBe(false);
-  expect(hasNew('Messages')).toBe(true);
+  expect(hasNew('Remarks')).toBe(true);
 
   // a teacher adds homework later → the dot is back
-  serve({ homework: Date.now() + 5_000, notices: now - 30 * DAY, events: null, messages: now - 2 * DAY }, Date.now() + 6_000);
+  serve({ homework: Date.now() + 5_000, notices: now - 30 * DAY, events: null, remarks: now - 2 * DAY }, Date.now() + 6_000);
   await refreshUpdates();
   expect(hasNew('Homework')).toBe(true);
 });
@@ -136,7 +136,7 @@ const dotsOn = (tree: ReactTestRenderer.ReactTestRenderer, id: string) => tree.r
 
 test('classic and orbit homes draw a dot where something is new, and drop it once seen', async () => {
   const now = Date.now();
-  serve({ homework: now - 1000, notices: null, messages: null, timetable: null, syllabus: null, events: null });
+  serve({ homework: now - 1000, notices: null, remarks: null, timetable: null, syllabus: null, events: null });
   stop = startUpdates('DEFAULT:student:7');
   await refreshUpdates();
 

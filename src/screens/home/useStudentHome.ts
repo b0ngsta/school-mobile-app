@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, errorText, peek } from '../../api';
 import type { GridItem } from '../../components/ui';
 import { useOnResume, useOnReturn } from '../../hooks';
-import type { FeesResponse, NavigateFn, StudentDashboard } from '../../types';
+import type { FeesResponse, NavigateFn, Session, StudentDashboard } from '../../types';
+import { hasFeature, withFeatures } from '../../features';
 import { refreshUpdates } from '../../updates';
 
 /** A home launcher entry: the route plus a short subtitle (orbit card / tile caption). */
@@ -20,17 +21,15 @@ export const STUDENT_MENU: HomeTile[] = [
   { icon: 'book-open-variant', label: 'Homework', sub: 'Tasks to finish', route: 'Homework' },
   { icon: 'clock-outline', label: 'Time table', sub: 'Your schedule', route: 'StudentTimetable' },
   { icon: 'bullhorn-outline', label: 'Notice Board', sub: 'School updates', route: 'Notices' },
+  { icon: 'account-voice', label: 'Class Announcements', sub: 'From your teachers', route: 'ClassAnnouncements' },
   { icon: 'party-popper', label: 'Events', sub: 'School events', route: 'Events' },
-  { icon: 'message-text-outline', label: 'Message', sub: 'From teachers', route: 'Messages' },
   { icon: 'bus-school', label: 'Transport', sub: 'Bus & driver', route: 'MyTransport' },
   { icon: 'calendar-star', label: 'Holidays', sub: 'Days off', route: 'Holidays' },
   { icon: 'account-tie', label: 'Subject Teacher', sub: 'Your teachers', route: 'SubjectTeachers' },
   { icon: 'book-education-outline', label: 'Syllabus', sub: 'Subject syllabus', route: 'Syllabus' },
   { icon: 'school', label: 'Exam Result', sub: 'Marks & results', route: 'Exams' },
   { icon: 'chart-box-outline', label: 'Performance Report', sub: 'Track progress', route: 'ReportCards' },
-  // HIDDEN for now (Oct 2026) — Remarks is switched off in the student portal. To bring it back,
-  // uncomment this line, the two Remarks lines in routes.ts and its colour in HomeStudent.default.tsx.
-  // { icon: 'comment-quote-outline', label: 'Remarks', sub: 'Teacher remarks', route: 'Remarks' },
+  { icon: 'comment-quote-outline', label: 'Teacher Remarks', sub: 'What teachers say', route: 'Remarks' },
   // School Info has no tile: it opens from the school header on the home (both themes).
   { icon: 'account-circle-outline', label: 'Profile', sub: 'Your details', route: 'Profile' },
 ];
@@ -41,10 +40,12 @@ export const FULL_SYLLABUS_TILE: HomeTile = {
 };
 
 /** The launcher list for this student: STUDENT_MENU (+ Full Syllabus when the class has one). */
-export function studentMenu(dash: StudentDashboard | null): HomeTile[] {
-  if (!dash?.full_syllabus) return STUDENT_MENU;
-  const at = STUDENT_MENU.findIndex(m => m.route === 'Syllabus') + 1;
-  return [...STUDENT_MENU.slice(0, at), FULL_SYLLABUS_TILE, ...STUDENT_MENU.slice(at)];
+export function studentMenu(dash: StudentDashboard | null, session?: Session | null): HomeTile[] {
+  // modules HQ switched off for the school are left out (features.ts)
+  const menu = withFeatures(STUDENT_MENU, session);
+  if (!dash?.full_syllabus) return menu;
+  const at = menu.findIndex(m => m.route === 'Syllabus') + 1;
+  return [...menu.slice(0, at), FULL_SYLLABUS_TILE, ...menu.slice(at)];
 }
 
 export type RouteArg = Parameters<NavigateFn>[0];
@@ -60,7 +61,8 @@ export interface StudentHomeData {
   refresh: () => void;
 }
 
-export function useStudentHome(): StudentHomeData {
+export function useStudentHome(session?: Session | null): StudentHomeData {
+  const hasFees = hasFeature(session, 'fees');
   const [dash, setDash] = useState<StudentDashboard | null>(() => peek<StudentDashboard>('/student/dashboard'));
   const [fees, setFees] = useState<FeesResponse | null>(() => peek<FeesResponse>('/student/fees'));
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function useStudentHome(): StudentHomeData {
     refreshUpdates(); // red "new" dots (quiet; the first check at sign-in is App.tsx's)
     try {
       setDash(await api<StudentDashboard>('/student/dashboard'));
-      api<FeesResponse>('/student/fees').then(setFees).catch(() => {});
+      if (hasFees) api<FeesResponse>('/student/fees').then(setFees).catch(() => {});
       setError(null);
     } catch (e) {
       setError(errorText(e));
@@ -81,7 +83,7 @@ export function useStudentHome(): StudentHomeData {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [hasFees]);
   useEffect(() => {
     load();
   }, [load]);

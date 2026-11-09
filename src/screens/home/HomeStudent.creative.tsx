@@ -15,6 +15,7 @@ import type { OrbitItem } from '../../components/orbit/OrbitHome';
 import { useI18n, useUpdateDots } from '../../hooks';
 import type { ScreenProps } from '../../types';
 import { studentMenu, useStudentHome } from './useStudentHome';
+import { featuresKey, hasFeature } from '../../features';
 import type { RouteArg } from './useStudentHome';
 
 /** Room for the school pill above the greeting (keeps the attendance panel unclipped). */
@@ -22,7 +23,10 @@ const SCHOOL_PILL_H = 34;
 
 export default function HomeStudentCreative({ navigate, session }: ScreenProps) {
   const { t, lang } = useI18n();
-  const { dash, fees, error, loading, refreshing, refresh } = useStudentHome();
+  const { dash, fees, error, loading, refreshing, refresh } = useStudentHome(session);
+  // modules HQ may switch off for the school (features.ts)
+  const flags = featuresKey(session);
+  const hasAttendance = hasFeature(session, 'attendance');
   const { hasNew, version: dots } = useUpdateDots();
 
   const p = dash?.profile;
@@ -40,7 +44,7 @@ export default function HomeStudentCreative({ navigate, session }: ScreenProps) 
       Fees: due ? t('{amount} due', { amount: inr(due) }) : feesLoaded ? t('All fees paid') : null,
       Notices: latestTitle,
     };
-    return studentMenu(dash).map(g => ({
+    return studentMenu(dash, session).map(g => ({
       key: `${g.route}:${g.label}`,
       label: t(g.label),
       sub: live[g.route] || t(g.sub),
@@ -50,7 +54,7 @@ export default function HomeStudentCreative({ navigate, session }: ScreenProps) 
     }));
     // `lang` re-translates the labels; `dots` changes when a red dot does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, lang, percent, due, feesLoaded, latestTitle, navigate, dots, dash?.full_syllabus]);
+  }, [t, lang, percent, due, feesLoaded, latestTitle, navigate, dots, dash?.full_syllabus, flags]);
 
   const classLine = p?.class_name ? [p.class_name, p.section_name].filter(Boolean).join(' · ') : t('dash.noClass');
   const detail = p?.roll_no ? `${classLine}  ·  ${t('dash.roll', { n: p.roll_no })}` : classLine;
@@ -69,13 +73,15 @@ export default function HomeStudentCreative({ navigate, session }: ScreenProps) 
         onPress={() => navigate('SchoolInfo')}
       />
       <HomeGreeting name={p?.full_name} detail={detail} />
-      <AttendancePanel
-        title={t('Attendance')}
-        icon="calendar-check"
-        value={percent != null ? `${percent}%` : '—'}
-        note={t('Overall attendance')}
-        action={{ label: t('View'), icon: 'chevron-right', tone: 'lilac', onPress: () => navigate('Attendance') }}
-      />
+      {hasAttendance && (
+        <AttendancePanel
+          title={t('Attendance')}
+          icon="calendar-check"
+          value={percent != null ? `${percent}%` : '—'}
+          note={t('Overall attendance')}
+          action={{ label: t('View'), icon: 'chevron-right', tone: 'lilac', onPress: () => navigate('Attendance') }}
+        />
+      )}
     </>
   );
 

@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "326901647483",
-    "project_id": "edumanage-push",
-    "storage_bucket": "edumanage-push.firebasestorage.app"
+    "project_number": "121844558778",
+    "project_id": "vidya-nova",
+    "storage_bucket": "vidya-nova.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:326901647483:android:1cc4eecfc0233c91c03ade",
+        "mobilesdk_app_id": "1:121844558778:android:b2373d7ab54e268acd0b83",
         "android_client_info": {
-          "package_name": "com.shelfwatchstudent"
+          "package_name": "com.vidyanova.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA-GQ-UcSYu5GIPlbMyPXYS_s5WG8uPPQ4"
+          "current_key": "AIzaSyCzJsQStKwGwnQV2y9boqz-gU2RF991Cxk"
         }
       ],
       "services": {

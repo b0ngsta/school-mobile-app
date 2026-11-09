@@ -1,0 +1,9 @@
+<resources>
+    <!-- Vidya Nova brand (logo): indigo V, navy cap, gold swoosh -->
+    <color name="brand_indigo">#2E2A78</color>
+    <color name="brand_gold">#F2B347</color>
+    <!-- launcher icon tile behind the logo -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- launch window + JS splash (src/components/SplashScreen.tsx SPLASH_BG) — keep them equal -->
+    <color name="splash_background">#FAF9FE</color>
+</resources>

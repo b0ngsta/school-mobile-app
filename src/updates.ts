@@ -23,7 +23,8 @@ export const SECTION_OF_ROUTE: Readonly<Record<string, string>> = {
   // student / parent
   Homework: 'homework',
   Notices: 'notices',
-  Messages: 'messages',
+  ClassAnnouncements: 'class_announcements',
+  Remarks: 'remarks',
   StudentTimetable: 'timetable',
   Syllabus: 'syllabus',
   FullSyllabus: 'syllabus',

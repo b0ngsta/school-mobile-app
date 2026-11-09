@@ -1,4 +1,4 @@
-// School Info (opened by tapping the school header on the student home):
+// School Info (opened by tapping the school header on any home — students, staff, drivers):
 // logo, name, director, session; Call / Email / Website shortcuts; school
 // details (code, affiliation, director, principal, session); contacts; logout.
 // Data: GET /school (edited by the school's admin / principal on the web).

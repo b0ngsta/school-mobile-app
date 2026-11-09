@@ -3,11 +3,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { photoUrl } from '../api';
 import { AccountActions } from '../components/AccountActions';
 import { ThemePicker } from '../components/ThemePicker';
-import { Avatar, Bone, Card, ErrorBox, Screen, SectionTitle, Skeleton, fmtDate } from '../components/ui';
+import { Bone, Card, ErrorBox, Screen, SectionTitle, Skeleton, fmtDate } from '../components/ui';
 import { useApi, useI18n } from '../hooks';
 import { LANGS } from '../i18n';
 import { colors, radius } from '../theme';
 import type { ScreenProps, StudentProfile } from '../types';
+import PhotoAvatar from '../components/PhotoAvatar';
 
 const Field = ({ label, value }: { label: string; value?: string | null }) => (
   <View style={styles.field}>
@@ -27,7 +28,7 @@ export default function Profile({ navigate, onLogout, session }: ScreenProps) {
       {p && (
         <>
           <Card style={styles.hero}>
-            <Avatar name={p.full_name} uri={photoUrl(p.photo_path)} size={64} />
+            <PhotoAvatar name={p.full_name} uri={photoUrl(p.photo_path)} size={64} testID="profile-photo" />
             <Text style={styles.name}>{p.full_name}</Text>
             <Text style={styles.meta}>
               {p.class_name ? `${p.class_name} · ${p.section_name || ''}` : ''}

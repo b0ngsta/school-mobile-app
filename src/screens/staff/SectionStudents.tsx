@@ -19,12 +19,13 @@ import {
   ScreenSkeleton,
   Sheet,
 } from '../../components/ui';
-import { usePagedApi } from '../../hooks';
+import { useOnReturn, usePagedApi } from '../../hooks';
 import { t } from '../../i18n';
 import { MANAGER_ROLES } from '../../roles';
 import { colors } from '../../theme';
 import type { NavigateFn, ScreenProps, StudentListItem } from '../../types';
 import { emailError, firstError, passwordError } from '../../validation';
+import { hasFeature } from '../../features';
 
 const EMPTY_FORM = { full_name: '', username: '', email: '', password: '', roll_no: '' };
 
@@ -33,6 +34,8 @@ export default function SectionStudents({ navigate, params, session }: ScreenPro
   const mayEdit = MANAGER_ROLES.includes(session.user_type) || canEdit;
   const list = usePagedApi<StudentListItem>(`/students?class_id=${classId}&section_id=${sectionId}`);
   const items = list.items;
+  // students added from Excel (StudentImport) show up on return
+  useOnReturn(() => list.reload());
   const [adding, setAdding] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,16 +111,20 @@ export default function SectionStudents({ navigate, params, session }: ScreenPro
         </View>
 
         <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+          {hasFeature(session, 'attendance') && mayEdit && (
+            <Button
+              label={t("Today's attendance")}
+              icon="clipboard-check-outline"
+              kind="soft"
+              onPress={() =>
+                navigate('MarkAttendance', { classId, sectionId, className, sectionName })
+              }
+              style={{ flex: 1, marginRight: 8 }}
+            />
+          )}
           <Button
-            label={t("✅ Today's attendance")}
-            kind="soft"
-            onPress={() =>
-              navigate('MarkAttendance', { classId, sectionId, className, sectionName })
-            }
-            style={{ flex: 1, marginRight: 8 }}
-          />
-          <Button
-            label={`📚 ${t('Homework')}`}
+            label={t('Homework')}
+            icon="book-open-variant"
             kind="soft"
             onPress={() =>
               navigate('ClassHomework', { classId, sectionId, className, sectionName, title: t('Class homework') })
@@ -125,6 +132,17 @@ export default function SectionStudents({ navigate, params, session }: ScreenPro
             style={{ flex: 1 }}
           />
         </View>
+        {mayEdit && (
+          <Button
+            label={t('Import students from Excel')}
+            icon="microsoft-excel"
+            kind="ghost"
+            small
+            onPress={() => navigate('StudentImport', { classId, sectionId, className, sectionName })}
+            style={{ marginBottom: 12 }}
+            testID="section-import"
+          />
+        )}
           </>
         }
       />

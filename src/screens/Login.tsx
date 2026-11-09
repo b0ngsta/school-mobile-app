@@ -87,7 +87,7 @@ export default function Login({ notice, onForgotPassword }: LoginProps) {
   );
 
   return (
-    <AuthLayout title="EduManage" subtitle={t('login.subtitle')} top={langToggle}>
+    <AuthLayout title="Vidya Nova" subtitle={t('login.subtitle')} top={langToggle}>
       {!error ? <NoticeBox message={notice} /> : null}
       <ErrorBox message={error} />
 

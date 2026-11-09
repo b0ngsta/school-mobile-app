@@ -1,4 +1,8 @@
-// Staff users (managers): paged list, add staff accounts, edit name/email/phone.
+// Staff users (managers): paged list, add staff accounts, edit name/email/phone
+// and the profile photo. Teachers are NOT listed here (Nov 2026): they have
+// their own Teachers screen (add, photo, details, class assignments), so this
+// list asks the API for `exclude_type=teacher` (and drops teachers itself for
+// an older server that ignores it).
 //  - Email is required on every account (password resets are emailed).
 //  - Only an admin may create or edit admin / principal / sub-admin accounts.
 //  - There is only one principal: the type is hidden once one exists.
@@ -25,10 +29,12 @@ import { t } from '../../i18n';
 import { ROLE_LABELS, colors } from '../../theme';
 import type { Role, ScreenProps, StaffUser } from '../../types';
 import { emailError, firstError, passwordError } from '../../validation';
+import PhotoAvatar from '../../components/PhotoAvatar';
+import { changeUserPhoto } from '../../components/userPhoto';
 
 /** Account types only an admin may create or edit. */
 const ADMIN_ONLY: Role[] = ['admin', 'principal', 'sub_admin'];
-const ALL_STAFF_TYPES: Role[] = ['teacher', 'coordinator', 'driver', 'sub_admin', 'principal', 'admin'];
+const ALL_STAFF_TYPES: Role[] = ['coordinator', 'driver', 'sub_admin', 'principal', 'admin'];
 
 const canManage = (actor: Role, target?: Role) => actor === 'admin' || !target || !ADMIN_ONLY.includes(target);
 
@@ -40,7 +46,7 @@ interface CreateForm {
   phone: string;
   user_type: Role;
 }
-const EMPTY_CREATE: CreateForm = { full_name: '', username: '', email: '', password: '', phone: '', user_type: 'teacher' };
+const EMPTY_CREATE: CreateForm = { full_name: '', username: '', email: '', password: '', phone: '', user_type: 'coordinator' };
 
 interface EditForm {
   user: StaffUser;
@@ -49,9 +55,10 @@ interface EditForm {
   phone: string;
 }
 
-export default function Users({ session }: ScreenProps) {
+export default function Users({ session, navigate }: ScreenProps) {
   const actor = session.user_type;
-  const list = usePagedApi<StaffUser>('/users');
+  const list = usePagedApi<StaffUser>('/users?exclude_type=teacher');
+  const items = useMemo(() => list.items?.filter(u => u.user_type !== 'teacher') ?? null, [list.items]);
   const principals = useApi<StaffUser[]>('/users?user_type=principal');
   const principalExists = (principals.data?.length ?? 0) > 0;
 
@@ -64,10 +71,11 @@ export default function Users({ session }: ScreenProps) {
   const [editing, setEditing] = useState<EditForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const openCreate = () => {
     setFormError(null);
-    setCreating({ ...EMPTY_CREATE, user_type: creatable[0] ?? 'teacher' });
+    setCreating({ ...EMPTY_CREATE, user_type: creatable[0] ?? 'coordinator' });
   };
 
   const openEdit = useCallback((u: StaffUser) => {
@@ -135,6 +143,24 @@ export default function Users({ session }: ScreenProps) {
     }
   };
 
+  const changePhoto = async () => {
+    if (!editing) return;
+    setFormError(null);
+    setPhotoBusy(true);
+    try {
+      const path = await changeUserPhoto(editing.user.id);
+      if (path) {
+        const id = editing.user.id;
+        setEditing(e => (e ? { ...e, user: { ...e.user, photo_path: path } } : e));
+        list.setItems(rows => rows?.map(u => (u.id === id ? { ...u, photo_path: path } : u)) ?? rows);
+      }
+    } catch (e) {
+      setFormError(errorText(e));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   if (!list.items && !list.error) {
     return (
       <ScreenSkeleton>
@@ -146,10 +172,17 @@ export default function Users({ session }: ScreenProps) {
   return (
     <View style={{ flex: 1 }}>
       <ListScreen
-        data={list.items}
+        data={items}
         keyExtractor={u => u.id}
         renderItem={u => <UserRow user={u} onEdit={canManage(actor, u.user_type) ? openEdit : undefined} />}
-        header={<ErrorBox message={list.error} />}
+        header={
+          <>
+            <ErrorBox message={list.error} />
+            <TouchableOpacity activeOpacity={0.75} onPress={() => navigate('Teachers')} style={[styles.teachersLink, { backgroundColor: colors.brandSoft }]}>
+              <Text style={{ color: colors.brand, fontWeight: '700', fontSize: 13 }}>{t('Teachers are listed in Teachers ›')}</Text>
+            </TouchableOpacity>
+          </>
+        }
         empty={<Empty icon="👥" text={t('No staff yet.')} />}
         refreshing={list.refreshing}
         onRefresh={list.refresh}
@@ -214,9 +247,16 @@ export default function Users({ session }: ScreenProps) {
         error={formError}>
         {editing && (
           <>
-            <Text style={styles.editMeta}>
-              @{editing.user.username} · {editing.user.user_type ? t(ROLE_LABELS[editing.user.user_type]) : ''}
-            </Text>
+            <View style={styles.photoRow}>
+              <PhotoAvatar name={editing.user.full_name} uri={photoUrl(editing.user.photo_path)} size={56} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.editMeta}>
+                  @{editing.user.username} · {editing.user.user_type ? t(ROLE_LABELS[editing.user.user_type]) : ''}
+                </Text>
+                <Button label={editing.user.photo_path ? t('Change photo') : t('Add photo')} icon="camera-outline" kind="soft" small
+                  onPress={changePhoto} busy={photoBusy} style={{ alignSelf: 'flex-start' }} testID="user-photo" />
+              </View>
+            </View>
             <Input label={t('Full name')} value={editing.full_name} onChangeText={v => setEditing({ ...editing, full_name: v })} />
             <Input
               label={t('Email')}
@@ -271,5 +311,7 @@ const styles = StyleSheet.create({
   rolePill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   label: { fontSize: 13, fontWeight: '600', color: colors.ink, marginBottom: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 },
-  editMeta: { fontSize: 12.5, color: colors.subtle, marginBottom: 10 },
+  editMeta: { fontSize: 12.5, color: colors.subtle, marginBottom: 8 },
+  photoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  teachersLink: { borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 12 },
 });

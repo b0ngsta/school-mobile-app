@@ -35,6 +35,7 @@ export interface ApiOptions {
 }
 
 const PASSWORD_CHANGE_REQUIRED = 'Password change required';
+let featureRefreshAt = 0;
 
 /** Authenticated request; resolves with the full response (data + headers). */
 async function authed<T>(path: string, opts: ApiOptions, retried = false) {
@@ -56,6 +57,12 @@ async function authed<T>(path: string, opts: ApiOptions, retried = false) {
       throw new ApiError(t('err.sessionExpired'), { status: 401, detail: e.detail, requestId: e.requestId });
     }
     if (e.status === 403 && e.detail === PASSWORD_CHANGE_REQUIRED) await setMustChangePassword(true);
+    // HQ switched this module off since our flags were saved: a refresh brings the new map
+    // (session.features → launchers disappear). Not awaited: the caller shows the server's message.
+    if (e.status === 403 && e.code === 'feature_disabled' && hasRefreshToken() && Date.now() - featureRefreshAt > 60_000) {
+      featureRefreshAt = Date.now(); // at most once a minute, whatever keeps asking
+      refreshTokens().catch(() => {});
+    }
     throw e;
   }
 }

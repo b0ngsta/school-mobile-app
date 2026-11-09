@@ -75,7 +75,11 @@ const pickSession = (p: Session): Session => ({
   theme_color: p.theme_color ?? null,
   must_change_password: !!p.must_change_password,
   ...(p.org_code ? { org_code: p.org_code, org_name: p.org_name ?? p.org_code } : {}),
+  ...(p.features && typeof p.features === 'object' ? { features: { ...p.features } } : {}),
 });
+
+const sameFeatures = (a?: Record<string, boolean>, b?: Record<string, boolean>): boolean =>
+  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 const sameSession = (a: Session | null, b: Session | null): boolean =>
   !!a &&
@@ -86,6 +90,7 @@ const sameSession = (a: Session | null, b: Session | null): boolean =>
   a.theme_color === b.theme_color &&
   a.org_code === b.org_code &&
   a.org_name === b.org_name &&
+  sameFeatures(a.features, b.features) &&
   !!a.must_change_password === !!b.must_change_password;
 
 /** The school code last used to sign in on this phone ('' if none). */
@@ -164,6 +169,8 @@ export async function applyAuthResponse(data: AuthResponse, { fresh }: { fresh: 
     must_change_password: data.must_change_password ?? prev?.must_change_password ?? false,
     org_code: data.org_code ?? prev?.org_code,
     org_name: data.org_name ?? prev?.org_name,
+    // the school's modules (features.ts): every token response carries the current map
+    features: data.features ?? (data.features === null ? undefined : prev?.features),
   });
 
   accessToken = data.access_token;

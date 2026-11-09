@@ -9,7 +9,7 @@
 //  - Real device, same Wi-Fi:     http://<your-laptop-LAN-IP>:8000  e.g. http://192.168.1.5:8000
 //  - Deployed server:             https://<server-domain>
 // export const API_URL = 'http://10.0.2.2:8000';
-export const API_URL = 'https://school-app-docker-v1.onrender.com';
+export const API_URL = 'https://bongsta-api.duckdns.org';
 
 /** Give up on a request after this long (the hosted server can cold-start slowly). */
 export const REQUEST_TIMEOUT_MS = 60_000;
